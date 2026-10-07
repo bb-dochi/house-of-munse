@@ -1,0 +1,24 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "house-of-munse",
+  "main": "./worker/index.ts",
+  "compatibility_date": "2026-10-01",
+  // token.ts가 node:crypto를 씁니다.
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    // /collection 같은 주소로 바로 들어와도 index.html을 내려 줍니다.
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "house-of-munse",
+      // 배포용 D1 (`wrangler d1 create house-of-munse`로 만든 것).
+      "database_id": "bb43a60e-8510-456c-912f-76cd81971c88",
+      // 로컬 개발(.wrangler)의 DB 파일은 이 id로 정해집니다. 배포 id와 따로 두어 로컬 데이터가 바뀌지 않게 합니다.
+      "preview_database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

@@ -1,14 +1,17 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
 import { api, ApiError, auth, BggHit, LedgerRow } from '../api';
 import { Layout } from '../components/Layout';
+import { categoryColor } from '../pixel';
 
 const STATUS_COLOR: Record<string, string> = { 보유: '#70E8A0', '대여 중': '#5FC8F0', '방출 예정': '#EBCB86', '방출 완료': '#B9AAB8' };
 const won = (n: number) => n.toLocaleString('ko-KR') + '원';
+const CATEGORIES = ['가족', '파티', '추상', '협력', '전략'];
 
-type Field = 'nameKo' | 'weight' | 'recommendedPlayers' | 'purchasePrice' | 'sellPrice' | 'status';
+type Field = 'nameKo' | 'weight' | 'category' | 'recommendedPlayers' | 'purchasePrice' | 'sellPrice' | 'status';
 /** 화면에서 고치는 값은 모두 글자로 들고 있다가, 칸을 떠날 때 서버로 보냅니다. */
 interface Row {
-  id: number;
+  id: string;
+  no: number;
   saved: Record<Field, string>;
   draft: Record<Field, string>;
 }
@@ -17,12 +20,13 @@ const toRow = (g: LedgerRow): Row => {
   const v: Record<Field, string> = {
     nameKo: g.nameKo,
     weight: g.weight ? g.weight.toFixed(1) : '',
+    category: g.category ?? '',
     recommendedPlayers: g.ownership?.recommendedPlayers ?? '',
     purchasePrice: g.ownership?.purchasePrice != null ? String(g.ownership.purchasePrice) : '',
     sellPrice: g.ownership?.sellPrice != null ? String(g.ownership.sellPrice) : '',
     status: g.ownership?.status ?? '보유',
   };
-  return { id: g.id, saved: v, draft: { ...v } };
+  return { id: g.id, no: g.no, saved: v, draft: { ...v } };
 };
 
 function Login({ onDone }: { onDone: () => void }) {
@@ -116,7 +120,7 @@ export function Admin() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authed]);
 
-  const edit = (id: number, key: Field, value: string) => setRows((rs) => rs && rs.map((r) => (r.id === id ? { ...r, draft: { ...r.draft, [key]: value } } : r)));
+  const edit = (id: string, key: Field, value: string) => setRows((rs) => rs && rs.map((r) => (r.id === id ? { ...r, draft: { ...r.draft, [key]: value } } : r)));
   const save = async (row: Row, key: Field, value = row.draft[key]) => {
     if (value === row.saved[key]) return;
     setError(null);
@@ -151,6 +155,35 @@ export function Admin() {
     }
   };
 
+  const exportAs = async (format: 'csv' | 'json') => {
+    setError(null);
+    try {
+      await api.exportLedger(format);
+      setNote(`장부를 ${format.toUpperCase()} 파일로 내보냈습니다.`);
+    } catch (e) {
+      fail(e);
+    }
+  };
+  const importFile = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const format = /\.json$/i.test(file.name) ? 'json' : /\.csv$/i.test(file.name) ? 'csv' : null;
+    if (!format) return setError('csv나 json 파일만 가져올 수 있습니다.');
+    if (!window.confirm(`「${file.name}」을(를) 가져올까요?
+같은 id의 게임은 파일 내용으로 덮어쓰고, 없는 게임은 새로 추가합니다. 파일에 없는 게임은 그대로 둡니다.`)) return;
+    setError(null);
+    setNote('가져오는 중…');
+    try {
+      const r = await api.importLedger(format, await file.text());
+      setRows((await api.ledger()).map(toRow));
+      setNote(`가져왔습니다. 새로 추가 ${r.inserted}개, 덮어쓰기 ${r.updated}개.${r.ignored.length ? ` 모르는 열은 건너뜀: ${r.ignored.join(', ')}` : ''}`);
+    } catch (err) {
+      setNote('');
+      fail(err);
+    }
+  };
+
   const list = rows ?? [];
   const sum = (key: Field) => list.reduce((a, r) => a + (Number(r.saved[key].replace(/[^0-9]/g, '')) || 0), 0);
   const cell = (r: Row, key: Field, label: string, extra = '', props: Record<string, string> = {}) => (
@@ -169,9 +202,15 @@ export function Admin() {
             <div className="txt">
               <div className="g11 eyebrow">▪ THE LEDGER</div>
               <h1 className="h1">공방 장부</h1>
-              <p>칸을 고치고 다른 곳을 누르면 바로 저장됩니다.</p>
+              <p>칸을 고치고 다른 곳을 누르면 바로 저장됩니다. 웨이트와 카테고리는 솥 추천의 기분 조건에 쓰입니다.</p>
             </div>
             <div className="adm-actions">
+              <button type="button" className="btn" onClick={() => exportAs('csv')}>CSV 내보내기</button>
+              <button type="button" className="btn" onClick={() => exportAs('json')}>JSON 내보내기</button>
+              <label className="btn">
+                가져오기
+                <input type="file" accept=".csv,.json,text/csv,application/json" hidden onChange={importFile} />
+              </label>
               <button type="button" className="btn" onClick={() => { auth.clear(); setAuthed(false); setRows(null); }}>로그아웃</button>
               <button type="button" className="btn-gold" onClick={add}>+ 행 추가</button>
             </div>
@@ -186,17 +225,18 @@ export function Admin() {
 
           <div role="status" aria-live="polite">{error ? <div className="err">{error}</div> : <div className="dim">{rows ? note || ' ' : '장부를 펴는 중…'}</div>}</div>
 
-          <Bgg onImported={(g) => { setRows((rs) => { const fresh = toRow(g); const others = (rs ?? []).filter((r) => r.id !== g.id); return [...others, fresh].sort((a, b) => a.id - b.id); }); setNote(`「${g.nameKo}」을(를) 가져왔습니다.`); }} />
+          <Bgg onImported={(g) => { setRows((rs) => { const fresh = toRow(g); const others = (rs ?? []).filter((r) => r.id !== g.id); return [...others, fresh].sort((a, b) => a.no - b.no); }); setNote(`「${g.nameKo}」을(를) 가져왔습니다.`); }} />
 
           <div className="sheet panel">
             <div className="sheet-in" role="table" aria-label="컬렉션 장부">
               <div className="trow letters" aria-hidden="true">
-                <div className="tc" /><div className="tc">A</div><div className="tc">B</div><div className="tc">C</div><div className="tc">D</div><div className="tc">E</div><div className="tc">F</div><div className="tc" />
+                <div className="tc" /><div className="tc">A</div><div className="tc">B</div><div className="tc">C</div><div className="tc">D</div><div className="tc">E</div><div className="tc">F</div><div className="tc">G</div><div className="tc" />
               </div>
               <div className="trow heads" role="row">
                 <div className="tc th c" role="columnheader">#</div>
                 <div className="tc th" role="columnheader">게임 이름</div>
                 <div className="tc th r" role="columnheader">웨이트</div>
+                <div className="tc th" role="columnheader">카테고리</div>
                 <div className="tc th" role="columnheader">추천 인원</div>
                 <div className="tc th r" role="columnheader">구매 가격 (원)</div>
                 <div className="tc th r" role="columnheader">방출 가격 (원)</div>
@@ -208,6 +248,12 @@ export function Admin() {
                   <div className="tc rowno" role="cell">{i + 1}</div>
                   {cell(r, 'nameKo', '게임 이름')}
                   {cell(r, 'weight', '웨이트', 'num', { inputMode: 'decimal' })}
+                  <div className="tc" role="cell">
+                    <select className="cell" aria-label="카테고리" value={r.draft.category} style={{ color: r.draft.category ? categoryColor(r.draft.category) : 'var(--dim)' }} onChange={(e) => { edit(r.id, 'category', e.target.value); save(r, 'category', e.target.value); }}>
+                      <option value="">미정</option>
+                      {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
                   {cell(r, 'recommendedPlayers', '추천 인원')}
                   {cell(r, 'purchasePrice', '구매 가격', 'num', { inputMode: 'numeric' })}
                   {cell(r, 'sellPrice', '방출 가격', 'num', { inputMode: 'numeric', placeholder: '-' })}

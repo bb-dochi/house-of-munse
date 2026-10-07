@@ -1,27 +1,29 @@
 import { ReactNode } from 'react';
 import { Link } from '../router';
 
-type Page = 'home' | 'collection' | 'reviews' | 'wishlist' | 'admin';
+type Page = 'home' | 'collection' | 'reviews' | 'wishlist' | 'mysteries' | 'admin';
 
-export function Layout({ page, count, children, footNote }: { page: Page; count?: number; children: ReactNode; footNote?: string }) {
+export function Layout({ page, count, children, footNote, footer = true }: { page: Page; count?: number; children: ReactNode; footNote?: string; footer?: boolean }) {
   const cur = (p: Page) => (page === p ? { className: 'nv on', 'aria-current': 'page' as const } : { className: 'nv' });
+  // 게임 후기(/reviews)는 당분간 메뉴에서 뺐습니다. 주소로 들어가면 그대로 열립니다.
+  const inMore = page === 'wishlist' || page === 'mysteries' || page === 'reviews';
   const dot = (p: Page) => (page === p ? <span className="nv-dot" aria-hidden="true">◆</span> : null);
   return (
     <div className="app g14">
       <header className="hd">
         <Link to="/" className="brand">
           <span className="g11 brand-name">HOUSE OF MUNSE</span>
-          {page === 'admin' ? <span className="g11 brand-admin">ADMIN</span> : <span className="brand-star" aria-hidden="true">✦</span>}
+          {page === 'admin' && <span className="g11 brand-admin">ADMIN</span>}
         </Link>
         <nav aria-label="주 메뉴" className="hd-nav">
           <Link to="/" {...cur('home')}>{dot('home')}공방</Link>
           <Link to="/collection" {...cur('collection')}>
             {dot('collection')}컬렉션{count !== undefined && <span className="g11 count">{count}</span>}
           </Link>
-          <Link to="/reviews" {...cur('reviews')}>{dot('reviews')}게임 후기</Link>
           <details className="more">
-            <summary className={page === 'wishlist' ? 'nv on' : 'nv'}>{dot('wishlist')}기타 ▾</summary>
+            <summary className={inMore ? 'nv on' : 'nv'}>{inMore && <span className="nv-dot" aria-hidden="true">◆</span>}기타 ▾</summary>
             <div className="more-menu">
+              <Link to="/mysteries" {...cur('mysteries')}>머더미스터리 후기</Link>
               <Link to="/wishlist" {...cur('wishlist')}>위시리스트</Link>
             </div>
           </details>
@@ -29,11 +31,13 @@ export function Layout({ page, count, children, footNote }: { page: Page; count?
         <Link to="/admin" className={page === 'admin' ? 'nv on adm' : 'nv adm'}>{dot('admin')}컬렉션 관리</Link>
       </header>
       {children}
-      <footer className="ft g11">
-        <div>HANDCRAFTED MOMENTS, ONE POT AT A TIME.</div>
-        {footNote && <div>{footNote}</div>}
-        <a href="https://boardgamegeek.com" target="_blank" rel="noreferrer">Powered by BGG</a>
-      </footer>
+      {footer && (
+        <footer className="ft g11">
+          <div>HANDCRAFTED MOMENTS, ONE POT AT A TIME.</div>
+          {footNote && <div>{footNote}</div>}
+          <a href="https://boardgamegeek.com" target="_blank" rel="noreferrer">Powered by BGG</a>
+        </footer>
+      )}
     </div>
   );
 }
@@ -72,6 +76,6 @@ export function LoadState({ loading, error, onRetry }: { loading: boolean; error
         <button type="button" className="btn" onClick={onRetry}>다시 불러오기</button>
       </div>
     );
-  if (loading) return <div className="state">선반을 살펴보는 중…<span className="g11 state-sub">서버가 잠들어 있었다면 깨어나는 데 1분쯤 걸릴 수 있어요.</span></div>;
+  if (loading) return <div className="state">선반을 살펴보는 중…</div>;
   return null;
 }

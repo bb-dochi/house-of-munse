@@ -11,6 +11,9 @@ interface Props {
   className?: string;
 }
 
+/** 직접 그린 아이콘이 없는 게임의 BGG 표지 주소. 표지가 있으면 상자 그림 대신 표지만 보여 줍니다. */
+export const coverOf = (imageUrl?: string | null, iconKey?: string | null) => (imageUrl && !hasIcon(iconKey) ? imageUrl : null);
+
 /** 게임 박스 한 개. 직접 그린 아이콘이 없고 BGG 이미지가 있으면 그 이미지를 표지 칸에 넣습니다. */
 export function BoxArt({ name, category, iconKey, imageUrl, unit = 2, showTitle = true, className }: Props) {
   const useImage = !!imageUrl && !hasIcon(iconKey);

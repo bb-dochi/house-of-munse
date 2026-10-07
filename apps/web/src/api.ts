@@ -1,14 +1,17 @@
-// API 호출 모음. 주소는 VITE_API_URL(없으면 같은 주소의 /api)을 씁니다.
+// API 호출 모음. 화면과 API(Worker)가 같은 주소에서 나가므로 /api를 그대로 씁니다.
 
-const BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || '/api';
+const BASE = '/api';
 const TOKEN_KEY = 'munse-admin-token';
 
 export interface Game {
-  id: number;
+  id: string;
+  /** 선반 번호. 장부에 들어온 순서입니다. */
+  no: number;
   nameKo: string;
   nameEn: string;
-  minPlayers: number;
-  maxPlayers: number;
+  /** 인원을 모르면 null */
+  minPlayers: number | null;
+  maxPlayers: number | null;
   playTime: number;
   weight: number;
   rating: number;
@@ -16,6 +19,8 @@ export interface Game {
   description: string;
   imageUrl: string | null;
   iconKey: string | null;
+  /** 이 게임에 붙는 확장판 */
+  expansions: { id: string; nameKo: string }[];
 }
 
 export interface Ownership {
@@ -65,6 +70,18 @@ export interface Wish {
   isSample: boolean;
 }
 
+export interface Mystery {
+  id: number;
+  playedAt: string;
+  title: string;
+  players: string;
+  playTime: string;
+  gm: boolean;
+  rank: string;
+  review: string;
+  spoiler: string;
+}
+
 export interface BggHit {
   bggId: number;
   name: string;
@@ -84,6 +101,10 @@ export const auth = {
 };
 
 async function call<T>(path: string, init: RequestInit = {}, admin = false): Promise<T> {
+  return (await send(path, init, admin)).json() as Promise<T>;
+}
+
+async function send(path: string, init: RequestInit = {}, admin = false): Promise<Response> {
   const headers: Record<string, string> = { ...(init.body ? { 'Content-Type': 'application/json' } : {}) };
   if (admin) headers.Authorization = `Bearer ${auth.get() ?? ''}`;
   let res: Response;
@@ -103,7 +124,7 @@ async function call<T>(path: string, init: RequestInit = {}, admin = false): Pro
     if (res.status === 401 && admin) auth.clear();
     throw new ApiError(message, res.status);
   }
-  return res.json() as Promise<T>;
+  return res;
 }
 
 const qs = (o: Record<string, string | number>) => new URLSearchParams(Object.entries(o).map(([k, v]) => [k, String(v)])).toString();
@@ -116,10 +137,34 @@ export const api = {
   login: (password: string) => call<{ token: string }>('/auth/login', { method: 'POST', body: JSON.stringify({ password }) }),
   ledger: () => call<LedgerRow[]>('/admin/ledger', {}, true),
   createGame: (data: Record<string, unknown>) => call<LedgerRow>('/admin/games', { method: 'POST', body: JSON.stringify(data) }, true),
-  updateGame: (id: number, data: Record<string, unknown>) => call<LedgerRow>(`/admin/games/${id}`, { method: 'PATCH', body: JSON.stringify(data) }, true),
-  deleteGame: (id: number) => call<{ ok: true }>(`/admin/games/${id}`, { method: 'DELETE' }, true),
+  updateGame: (id: string, data: Record<string, unknown>) => call<LedgerRow>(`/admin/games/${id}`, { method: 'PATCH', body: JSON.stringify(data) }, true),
+  deleteGame: (id: string) => call<{ ok: true }>(`/admin/games/${id}`, { method: 'DELETE' }, true),
   bggSearch: (q: string) => call<BggHit[]>(`/admin/bgg/search?${qs({ q })}`, {}, true),
+  createPlay: (data: Record<string, unknown>) => call<Play>('/admin/plays', { method: 'POST', body: JSON.stringify(data) }, true),
+  updatePlay: (id: number, data: Record<string, unknown>) => call<Play>(`/admin/plays/${id}`, { method: 'PATCH', body: JSON.stringify(data) }, true),
+  deletePlay: (id: number) => call<{ ok: true }>(`/admin/plays/${id}`, { method: 'DELETE' }, true),
+  mysteries: () => call<Mystery[]>('/mysteries'),
+  createMystery: (data: Record<string, unknown>) => call<Mystery>('/admin/mysteries', { method: 'POST', body: JSON.stringify(data) }, true),
+  updateMystery: (id: number, data: Record<string, unknown>) => call<Mystery>(`/admin/mysteries/${id}`, { method: 'PATCH', body: JSON.stringify(data) }, true),
+  deleteMystery: (id: number) => call<{ ok: true }>(`/admin/mysteries/${id}`, { method: 'DELETE' }, true),
+  createWish: (data: Record<string, unknown>) => call<Wish>('/admin/wishes', { method: 'POST', body: JSON.stringify(data) }, true),
+  updateWish: (id: number, data: Record<string, unknown>) => call<Wish>(`/admin/wishes/${id}`, { method: 'PATCH', body: JSON.stringify(data) }, true),
+  deleteWish: (id: number) => call<{ ok: true }>(`/admin/wishes/${id}`, { method: 'DELETE' }, true),
+  /** 장부 전체를 파일로 받아 브라우저 다운로드로 저장합니다. */
+  exportLedger: async (format: 'csv' | 'json') => {
+    const res = await send(`/admin/export?${qs({ format })}`, {}, true);
+    const name = res.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1] ?? `munse-ledger.${format}`;
+    const url = URL.createObjectURL(await res.blob());
+    const a = Object.assign(document.createElement('a'), { href: url, download: name });
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  },
+  importLedger: (format: 'csv' | 'json', text: string) =>
+    call<{ inserted: number; updated: number; ignored: string[] }>('/admin/import', { method: 'POST', body: JSON.stringify({ format, text }) }, true),
   bggImport: (bggId: number) => call<LedgerRow>('/admin/bgg/import', { method: 'POST', body: JSON.stringify({ bggId }) }, true),
 };
 
-export const playersText = (g: Pick<Game, 'minPlayers' | 'maxPlayers'>) => (g.minPlayers === g.maxPlayers ? `${g.minPlayers}인` : `${g.minPlayers}–${g.maxPlayers}인`);
+export const playersText = (g: Pick<Game, 'minPlayers' | 'maxPlayers'>) =>
+  g.minPlayers === null || g.maxPlayers === null ? '인원 미정' : g.minPlayers === g.maxPlayers ? `${g.minPlayers}인` : `${g.minPlayers}–${g.maxPlayers}인`;
+export const timeText = (g: Pick<Game, 'playTime'>) => (g.playTime ? `${g.playTime}분` : '시간 미정');
+export const weightText = (g: Pick<Game, 'weight'>) => (g.weight ? g.weight.toFixed(1) : '-');

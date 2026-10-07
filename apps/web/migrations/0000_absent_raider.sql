@@ -1,0 +1,22 @@
+CREATE TABLE `games` (
+	`id` text PRIMARY KEY NOT NULL,
+	`title` text NOT NULL,
+	`english_title` text DEFAULT '' NOT NULL,
+	`bgg_id` integer,
+	`cover_image` text DEFAULT '' NOT NULL,
+	`players` text DEFAULT '' NOT NULL,
+	`play_time` text DEFAULT '' NOT NULL,
+	`weight` real DEFAULT 0 NOT NULL,
+	`rating` real DEFAULT 0 NOT NULL,
+	`owned` integer DEFAULT true NOT NULL,
+	`purchase_price` integer,
+	`purchase_date` text DEFAULT '' NOT NULL,
+	`purchase_store` text DEFAULT '' NOT NULL,
+	`disposed` integer DEFAULT false NOT NULL,
+	`sale_price` integer,
+	`sale_date` text DEFAULT '' NOT NULL,
+	`play_count` integer DEFAULT 0 NOT NULL,
+	`last_played` text DEFAULT '' NOT NULL,
+	`created_at` text NOT NULL,
+	`updated_at` text NOT NULL
+);
