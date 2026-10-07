@@ -1,0 +1,23 @@
+# Render 무료 웹 서비스용 설정. Render 대시보드에서 "New > Blueprint"로 이 저장소를 고르면 읽어 갑니다.
+services:
+  - type: web
+    name: house-of-munse-api
+    runtime: node
+    plan: free
+    rootDir: .
+    buildCommand: npm ci && npm run prisma:generate -w apps/api && npm run db:push -w apps/api && npm run build -w apps/api
+    startCommand: npm run start:prod -w apps/api
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: DATABASE_URL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: TOKEN_SECRET
+        generateValue: true
+      - key: WEB_ORIGIN
+        sync: false
+      - key: BGG_TOKEN
+        sync: false

@@ -1,0 +1,70 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 방문자에게 보여 주는 게임 정보
+model Game {
+  id          Int        @id @default(autoincrement())
+  bggId       Int?       @unique
+  nameKo      String
+  nameEn      String
+  minPlayers  Int
+  maxPlayers  Int
+  playTime    Int
+  weight      Float
+  rating      Float
+  category    String
+  description String     @default("")
+  imageUrl    String?
+  iconKey     String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  ownership   Ownership?
+  plays       Play[]
+}
+
+// 어드민만 보는 소장 정보 (가격은 공개 API로 나가지 않습니다)
+model Ownership {
+  id                 Int    @id @default(autoincrement())
+  gameId             Int    @unique
+  game               Game   @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  recommendedPlayers String @default("")
+  purchasePrice      Int?
+  sellPrice          Int?
+  status             String @default("보유")
+}
+
+model Play {
+  id         Int      @id @default(autoincrement())
+  playedAt   DateTime
+  gameId     Int?
+  game       Game?    @relation(fields: [gameId], references: [id], onDelete: SetNull)
+  gameName   String
+  gameNameEn String   @default("")
+  players    String
+  winner     String
+  duration   String
+  again      Int
+  memo       String
+  isSample   Boolean  @default(false)
+}
+
+model Wish {
+  id            Int     @id @default(autoincrement())
+  priority      Int
+  nameKo        String
+  nameEn        String
+  category      String
+  players       String
+  playTime      Int
+  weight        Float
+  expectedPrice String
+  status        String
+  reason        String
+  isSample      Boolean @default(false)
+}
