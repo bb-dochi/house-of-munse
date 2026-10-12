@@ -5,7 +5,7 @@ import { fillStatements } from './bggfill';
 
 const thing = (o: Partial<BggThing>): BggThing => ({
   bggId: 0, nameKo: '', nameEn: '', minPlayers: 2, maxPlayers: 4, playTime: 60, weight: 2.5, rating: 7.5,
-  category: '전략', description: '', imageUrl: null, type: 'boardgame', baseBggIds: [], ...o,
+  category: '전략', description: '', imageUrl: null, bestPlayers: '4', type: 'boardgame', baseBggIds: [], ...o,
 });
 
 test('BGG 채우기: 빈 칸만 채우고, 본판이면 확장 연결을 푼다', () => {
@@ -13,6 +13,7 @@ test('BGG 채우기: 빈 칸만 채우고, 본판이면 확장 연결을 푼다'
   assert.match(sql, /weight = CASE WHEN weight = 0 THEN 2.5 ELSE weight END/);
   assert.match(sql, /category = CASE WHEN category = '' THEN '전략' ELSE category END/);
   assert.match(sql, /players = CASE WHEN players = '' THEN '2–4' ELSE players END/);
+  assert.match(sql, /best_players = CASE WHEN best_players = '' THEN '4' ELSE best_players END/);
   assert.match(sql, /is_expansion = 0/);
   assert.match(sql, /base_game_id = NULL/);
   assert.match(sql, /WHERE id = 'a';$/);
@@ -26,6 +27,6 @@ test('BGG 채우기: 확장판은 장부에 있는 본판에 잇고, 없으면 �
 });
 
 test('BGG 채우기: 모르는 값(0, 빈 값)으로는 덮지 않는다', () => {
-  const [sql] = fillStatements([{ id: 'a', bgg_id: 1 }], [thing({ bggId: 1, weight: 0, playTime: 0, minPlayers: 0, imageUrl: null })]);
+  const [sql] = fillStatements([{ id: 'a', bgg_id: 1 }], [thing({ bggId: 1, weight: 0, playTime: 0, minPlayers: 0, imageUrl: null, bestPlayers: '' })]);
   assert.doesNotMatch(sql, /weight =|play_time =|players =|cover_image =/);
 });

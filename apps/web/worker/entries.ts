@@ -1,5 +1,5 @@
 // 게임 후기(plays)·위시리스트(wishes)·머더미스터리 후기(mysteries) 입력값 정리. 순수 함수라 테스트로 확인합니다.
-import { CATEGORIES, parseWeight } from './ledger';
+import { CATEGORIES, parseImageUrl, parseWeight } from './ledger';
 import type { Columns } from './rows';
 
 export const WISH_STATUSES = ['곧 주문', '세일 기다리는 중', '고민 중'];
@@ -44,6 +44,8 @@ const WISH: Record<string, Rule> = {
   expectedPrice: ['expected_price', text, ''],
   status: ['status', oneOf(WISH_STATUSES), '상태는 ' + WISH_STATUSES.join(', ') + ' 중 하나여야 합니다.'],
   reason: ['reason', text, ''],
+  bggId: ['bgg_id', (v) => (text(v) === '' || text(v) === '0' ? 0 : intIn(1, 99_999_999)(v)), 'BGG 번호가 올바르지 않습니다.'],
+  imageUrl: ['image_url', parseImageUrl, '이미지 주소는 http:// 또는 https://로 시작해야 합니다.'],
 };
 
 const MYSTERY: Record<string, Rule> = {
@@ -60,7 +62,7 @@ const MYSTERY: Record<string, Rule> = {
 // 새로 만들 때 비어 있으면 채우는 값. 이름·날짜처럼 꼭 필요한 칸은 여기 없어서 오류가 납니다.
 const PLAY_DEFAULTS: Input = { gameNameEn: '', players: '', winner: '', duration: '', again: 3, memo: '' };
 const MYSTERY_DEFAULTS: Input = { players: '', playTime: '', gm: 0, review: '', spoiler: '' };
-const WISH_DEFAULTS: Input = { priority: 99, nameEn: '', category: '', players: '', playTime: 0, weight: 0, expectedPrice: '', status: '고민 중', reason: '' };
+const WISH_DEFAULTS: Input = { priority: 99, nameEn: '', category: '', players: '', playTime: 0, weight: 0, expectedPrice: '', status: '고민 중', reason: '', bggId: 0, imageUrl: '' };
 
 /**
  * 보낸 칸만 열 이름으로 바꿉니다. create면 모든 칸이 있어야 하고, 빠진 칸은 기본값으로 채웁니다.

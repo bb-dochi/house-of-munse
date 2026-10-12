@@ -31,6 +31,7 @@ export function fillStatements(rows: FillRow[], things: BggThing[]): string[] {
       fill('players', t.minPlayers > 0 && t.maxPlayers > 0 ? playersColumn(t.minPlayers, t.maxPlayers) : null, "''"),
       fill('play_time', t.playTime > 0 ? playTimeColumn(t.playTime) : null, "''"),
       fill('cover_image', t.imageUrl, "''"),
+      fill('best_players', t.bestPlayers, "''"),
       `is_expansion = ${isExpansion ? 1 : 0}`,
       !isExpansion ? 'base_game_id = NULL' : base ? `base_game_id = ${sqlValue(base)}` : null,
       `updated_at = ${sqlValue(now)}`,

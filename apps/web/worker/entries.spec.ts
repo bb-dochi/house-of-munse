@@ -29,6 +29,10 @@ test('위시: 카테고리·상태·웨이트·순위를 검사한다', () => {
   assert.match(String(toWishColumns({ weight: '9' }, false)), /웨이트/);
   assert.match(String(toWishColumns({ priority: '0' }, false)), /순위/);
   assert.deepEqual(toWishColumns({ weight: '' }, false), { weight: 0, is_sample: 0 });
+  const fromBgg = toWishColumns({ nameKo: '아크 노바', bggId: '342942', imageUrl: 'https://cf.geekdo-images.com/a.jpg' }, true) as Record<string, unknown>;
+  assert.deepEqual([fromBgg.bgg_id, fromBgg.image_url, fromBgg.reason, fromBgg.expected_price], [342942, 'https://cf.geekdo-images.com/a.jpg', '', '']);
+  assert.equal((toWishColumns({ nameKo: '직접 적은 게임' }, true) as Record<string, unknown>).bgg_id, 0);
+  assert.match(String(toWishColumns({ imageUrl: 'ftp://x' }, false)), /이미지/);
 });
 
 test('머미 후기: 날짜·이름·랭크는 꼭 필요하고, GM은 있음/없음, 예시 표시는 없다', () => {

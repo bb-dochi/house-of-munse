@@ -30,11 +30,21 @@ export function decodeEntities(s: string): string {
     .replace(/&amp;/g, '&');
 }
 
-export function guessCategory(categories: string[], mechanics: string[], weight: number): string {
+/**
+ * BGG의 유형(subdomain: Strategy·Family·Party·Thematic…), 카테고리, 메커니즘으로 우리 카테고리 하나를 고릅니다.
+ * 머더미스터리 → 협력 → 파티 → 전략(Strategy·Thematic·Wargames) → 가족(Family·Children's) 순서로 보고,
+ * 유형이 없는 게임(추상 포함)은 웨이트 2.5를 기준으로 전략과 가족으로 나눕니다.
+ * 유형 이름은 XML의 순위 이름(strategygames)과 사이트 이름(Strategy Games) 모두 받습니다.
+ */
+export function guessCategory(categories: string[], mechanics: string[], subdomains: string[], weight: number): string {
   const has = (list: string[], word: string) => list.some((x) => x.toLowerCase().includes(word));
+  const party = has(categories, 'party') || has(subdomains, 'party');
+  // 늑대인간류처럼 Murder/Mystery가 붙은 파티 게임은 파티로 둡니다.
+  if (has(categories, 'murder') && !party) return '머더미스터리';
   if (has(mechanics, 'cooperative')) return '협력';
-  if (has(categories, 'party')) return '파티';
-  if (has(categories, 'abstract')) return '추상';
+  if (party) return '파티';
+  if (has(subdomains, 'strateg') || has(subdomains, 'themat') || has(subdomains, 'war')) return '전략';
+  if (has(subdomains, 'famil') || has(subdomains, 'child')) return '가족';
   return weight >= 2.5 ? '전략' : '가족';
 }
 
@@ -50,6 +60,19 @@ export interface BggGame {
   category: string;
   description: string;
   imageUrl: string | null;
+  /** BGG 유저 투표의 베스트 인원 ("4", "3–4"). 투표가 없으면 빈 값 */
+  bestPlayers: string;
+}
+
+/** poll-summary의 "Best with 3–4 players"를 "3–4"로 바꿉니다. */
+export function bestPlayersOf(it: any): string {
+  const summary = (arr(it['poll-summary']) as any[]).find((p) => p?.name === 'suggested_numplayers');
+  const best = (arr(summary?.result) as { name?: string; value?: string }[]).find((r) => r.name === 'bestwith');
+  const nums = (String(best?.value ?? '').match(/\d+/g) ?? []).map(Number).filter((n) => n > 0 && n < 100);
+  if (!nums.length) return '';
+  const min = Math.min(...nums);
+  const max = Math.max(...nums);
+  return min === max ? `${min}` : `${min}–${max}`;
 }
 
 export function mapThing(parsed: any): BggGame | null {
@@ -83,7 +106,8 @@ function mapItem(it: any): BggGame {
   const links = arr(it.link) as { type?: string; value?: string }[];
   const pickLinks = (type: string) => links.filter((l) => l.type === type).map((l) => String(l.value ?? ''));
   const ratings = it.statistics?.ratings ?? {};
-  const weight = Math.round(num(ratings.averageweight) * 10) / 10;
+  const weight = num(ratings.averageweight);
+  const subdomains = (arr(ratings.ranks?.rank) as { type?: string; name?: string }[]).filter((r) => r.type === 'family').map((r) => String(r.name ?? ''));
   const text = decodeEntities(String(it.description ?? '')).replace(/\s+/g, ' ').trim();
   return {
     bggId: num(it.id),
@@ -94,8 +118,9 @@ function mapItem(it: any): BggGame {
     playTime: num(it.playingtime),
     weight,
     rating: Math.round(num(ratings.average) * 10) / 10,
-    category: guessCategory(pickLinks('boardgamecategory'), pickLinks('boardgamemechanic'), weight),
+    category: guessCategory(pickLinks('boardgamecategory'), pickLinks('boardgamemechanic'), subdomains, weight),
     description: text.length > 160 ? text.slice(0, 157) + '…' : text,
     imageUrl: it.image ? String(it.image) : null,
+    bestPlayers: bestPlayersOf(it),
   };
 }

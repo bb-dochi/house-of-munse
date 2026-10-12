@@ -60,7 +60,9 @@ npm run dev                                       # http://localhost:5173 (화�
 
 - 게임 id는 문자열(UUID, BG Stats에서 온 것은 `bgstats:…`)입니다. 컬렉션의 `HM-001` 번호는 등록 순서로 매깁니다.
 - 인원·시간은 house-of-munse2와 같이 글자로 저장합니다 (`"2–4"`, `"30–60 min"`). API가 읽을 때 숫자로 바꿉니다. 시간 범위는 긴 쪽을 씁니다.
-- 상태는 `status`(보유·대여 중·방출 예정·방출 완료)에 두고, 방출 완료면 `disposed`도 1로 맞춥니다. 방문자 화면은 `owned = 1 AND disposed = 0`인 게임만 보여 줍니다.
+- 상태는 `status`(보유·대여 중·방출 예정·방출 완료)에 두고, 방출 완료면 `disposed`도 1로 맞춥니다. 방문자 화면은 `owned = 1 AND disposed = 0`인 게임만 보여 주고, 대여 중인 게임에는 "대여 중" 표시를 붙입니다 (솥 추천에는 그대로 나옵니다).
+- 웨이트는 BGG 평균값을 반올림하지 않고 그대로 저장하고, 화면에는 소수 둘째 자리까지 잘라서 보여 줍니다 (2.4863 → 2.48).
+- 표지(`cover_image`)는 BGG 이미지 주소를 쓰고, BGG에 없는 게임은 장부의 표지 칸에서 파일을 올리거나 주소를 붙여 넣습니다.
 
 ## BGG 연동
 
@@ -77,13 +79,15 @@ npm run dev                                       # http://localhost:5173 (화�
 
 | 주소 | 설명 |
 |---|---|
-| `GET /api/games?q&players&weight&category&sort` | 컬렉션 목록 (방출 완료 제외, 가격 없음) |
+| `GET /api/games?q&players&category&sort&order` | 컬렉션 목록 (방출 완료 제외, 가격 없음). `players`는 `1-2`·`3-4`·`5-6`·`7+` (그 구간의 어떤 인원으로든 할 수 있는 게임). `sort`는 `no`(등록순)·`name`·`rating`·`weight`·`time`, `order`는 `asc`·`desc`. `total`은 확장판까지 센 상자 수 |
 | `GET /api/games/:id` | 게임 하나 |
 | `GET /api/recommend?players&time&mood` | 솥 추천. 인원 필수, 기분 2점, 시간 1점 |
 | `GET /api/plays`, `GET /api/wishlist` | 후기, 위시리스트 |
 | `POST /api/auth/login` | `{password}` → `{token}` (12시간) |
 | `GET /api/admin/ledger` | 장부 (가격 포함, 로그인 필요) |
 | `POST/PATCH/DELETE /api/admin/games[/:id]` | 장부 추가·수정·삭제 |
+| `PUT /api/admin/games/:id/cover` | 표지 이미지 올리기 (JPEG·PNG·WebP, 1MB 이하). 화면이 긴 변 600px로 줄여 보냅니다 |
+| `GET /api/covers/:id` | 장부에서 올린 표지 (D1 `covers` 표, R2 없이) |
 | `GET /api/admin/bgg/search?q`, `POST /api/admin/bgg/import` | BGG 검색·가져오기 |
 
 게임 id(`:id`)는 문자열입니다.

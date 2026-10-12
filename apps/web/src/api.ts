@@ -12,6 +12,8 @@ export interface Game {
   /** 인원을 모르면 null */
   minPlayers: number | null;
   maxPlayers: number | null;
+  /** BGG 유저 투표의 베스트 인원. 모르면 null */
+  bestPlayers: { min: number; max: number } | null;
   playTime: number;
   weight: number;
   rating: number;
@@ -19,8 +21,10 @@ export interface Game {
   description: string;
   imageUrl: string | null;
   iconKey: string | null;
+  /** 소장은 하고 있지만 남에게 빌려준 상태 */
+  onLoan: boolean;
   /** 이 게임에 붙는 확장판 */
-  expansions: { id: string; nameKo: string }[];
+  expansions: { id: string; nameKo: string; onLoan: boolean }[];
 }
 
 export interface Ownership {
@@ -67,6 +71,8 @@ export interface Wish {
   expectedPrice: string;
   status: string;
   reason: string;
+  bggId: number | null;
+  imageUrl: string | null;
   isSample: boolean;
 }
 
@@ -80,6 +86,19 @@ export interface Mystery {
   rank: string;
   review: string;
   spoiler: string;
+}
+
+/** 장부에 넣지 않고 받아 보는 BGG 게임 정보 */
+export interface BggGame {
+  bggId: number;
+  nameKo: string;
+  nameEn: string;
+  minPlayers: number;
+  maxPlayers: number;
+  playTime: number;
+  weight: number;
+  category: string;
+  imageUrl: string | null;
 }
 
 export interface BggHit {
@@ -105,7 +124,7 @@ async function call<T>(path: string, init: RequestInit = {}, admin = false): Pro
 }
 
 async function send(path: string, init: RequestInit = {}, admin = false): Promise<Response> {
-  const headers: Record<string, string> = { ...(init.body ? { 'Content-Type': 'application/json' } : {}) };
+  const headers: Record<string, string> = { ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...(init.headers as Record<string, string> | undefined) };
   if (admin) headers.Authorization = `Bearer ${auth.get() ?? ''}`;
   let res: Response;
   try {
@@ -161,10 +180,16 @@ export const api = {
   },
   importLedger: (format: 'csv' | 'json', text: string) =>
     call<{ inserted: number; updated: number; ignored: string[] }>('/admin/import', { method: 'POST', body: JSON.stringify({ format, text }) }, true),
+  /** 화면에서 줄인 표지 이미지를 올립니다. 서버가 표지 주소를 /api/covers/:id 로 바꿉니다. */
+  uploadCover: (id: string, image: Blob) =>
+    call<LedgerRow>(`/admin/games/${encodeURIComponent(id)}/cover`, { method: 'PUT', body: image, headers: { 'Content-Type': image.type } }, true),
+  bggThing: (bggId: number) => call<BggGame>(`/admin/bgg/thing/${bggId}`, {}, true),
   bggImport: (bggId: number) => call<LedgerRow>('/admin/bgg/import', { method: 'POST', body: JSON.stringify({ bggId }) }, true),
 };
 
 export const playersText = (g: Pick<Game, 'minPlayers' | 'maxPlayers'>) =>
   g.minPlayers === null || g.maxPlayers === null ? '인원 미정' : g.minPlayers === g.maxPlayers ? `${g.minPlayers}인` : `${g.minPlayers}–${g.maxPlayers}인`;
 export const timeText = (g: Pick<Game, 'playTime'>) => (g.playTime ? `${g.playTime}분` : '시간 미정');
-export const weightText = (g: Pick<Game, 'weight'>) => (g.weight ? g.weight.toFixed(1) : '-');
+/** 웨이트는 소수 둘째 자리까지, 반올림하지 않고 잘라서 보여 줍니다 (2.4863 → 2.48). */
+export const weightNumber = (w: number) => (Math.floor(w * 100 + 1e-6) / 100).toFixed(2);
+export const weightText = (g: Pick<Game, 'weight'>) => (g.weight ? weightNumber(g.weight) : '-');

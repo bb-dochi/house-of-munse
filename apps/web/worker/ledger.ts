@@ -2,7 +2,7 @@
 
 export const STATUSES = ['보유', '대여 중', '방출 예정', '방출 완료'];
 /** 솥 추천의 기분(가볍게·왁자지껄·한 팀으로)이 쓰는 분류. 빈 값은 "미정"입니다. */
-export const CATEGORIES = ['가족', '파티', '추상', '협력', '전략'];
+export const CATEGORIES = ['전략', '가족', '파티', '협력', '머더미스터리'];
 
 /** "3–4인", "2", "4~8명" 같은 글에서 최소·최대 인원을 읽습니다. */
 export function parsePlayers(text: string): { min: number; max: number } | null {
@@ -20,7 +20,20 @@ export function parsePrice(value: unknown): number | null {
 
 export function parseWeight(value: unknown): number | null {
   const n = Number(String(value ?? '').replace(',', '.'));
-  return Number.isFinite(n) && n >= 0 && n <= 5 ? Math.round(n * 10) / 10 : null;
+  // BGG 평균 웨이트(2.4863 같은)를 그대로 두고, 화면에서 소수 둘째 자리까지 잘라 보여 줍니다.
+  return Number.isFinite(n) && n >= 0 && n <= 5 ? n : null;
+}
+
+/** 표지 주소. 웹 이미지(http/https)나 장부에서 올린 표지(/api/covers/…)만 받습니다. 빈 값은 표지 없음입니다. */
+export function parseImageUrl(value: unknown): string | null {
+  const url = String(value ?? '').trim();
+  if (!url || url.startsWith('/api/covers/')) return url;
+  try {
+    const u = new URL(url);
+    return u.protocol === 'https:' || u.protocol === 'http:' ? url : null;
+  } catch {
+    return null;
+  }
 }
 
 export interface LedgerInput {
@@ -35,6 +48,8 @@ export interface LedgerInput {
   playTime?: unknown;
   rating?: unknown;
   description?: unknown;
+  imageUrl?: unknown;
+  bestPlayers?: unknown;
 }
 
 export interface GamePatch {
@@ -47,6 +62,9 @@ export interface GamePatch {
   description?: string;
   playTime?: number;
   rating?: number;
+  imageUrl?: string;
+  /** "4", "3–4" 모양. 빈 값은 모름 */
+  bestPlayers?: string;
 }
 
 export interface OwnershipPatch {
@@ -106,6 +124,17 @@ export function toPatch(input: LedgerInput): LedgerPatch | string {
     const r = Number(input.rating);
     if (!Number.isFinite(r) || r < 0 || r > 10) return '평점은 0~10 사이 숫자로 입력해 주세요.';
     game.rating = Math.round(r * 10) / 10;
+  }
+  if (input.bestPlayers !== undefined) {
+    const text = String(input.bestPlayers).trim();
+    const range = text ? parsePlayers(text) : null;
+    if (text && !range) return '베스트 인원은 4나 3-4처럼 숫자로 입력해 주세요.';
+    game.bestPlayers = range ? (range.min === range.max ? `${range.min}` : `${range.min}–${range.max}`) : '';
+  }
+  if (input.imageUrl !== undefined) {
+    const url = parseImageUrl(input.imageUrl);
+    if (url === null) return '이미지 주소는 http:// 또는 https://로 시작해야 합니다.';
+    game.imageUrl = url;
   }
   return { game, ownership };
 }

@@ -6,7 +6,7 @@ import { GameRow, minutes, toColumns, toLedger, toPublic } from './rows';
 const row: GameRow = {
   id: 'bgstats:abc', no: 7, title: '윙스팬', english_title: 'Wingspan', bgg_id: 266192, cover_image: '',
   players: '1–5', play_time: '40–70 min', weight: 2.5, rating: 8, category: '전략', description: '',
-  icon_key: null, status: '보유', purchase_price: 62000, sale_price: null, is_expansion: 0, base_game_id: null,
+  icon_key: null, status: '보유', purchase_price: 62000, sale_price: null, is_expansion: 0, base_game_id: null, best_players: '3–4',
 };
 
 test('행 변환: munse2 글자 칸에서 인원·시간 숫자를 읽는다', () => {
@@ -14,6 +14,8 @@ test('행 변환: munse2 글자 칸에서 인원·시간 숫자를 읽는다', (
   assert.equal(g.minPlayers, 1);
   assert.equal(g.maxPlayers, 5);
   assert.equal(g.playTime, 70);
+  assert.deepEqual(g.bestPlayers, { min: 3, max: 4 });
+  assert.equal(toPublic({ ...row, best_players: '' }).bestPlayers, null);
   assert.equal(g.imageUrl, null);
   assert.equal(minutes(''), 0);
   assert.deepEqual([toPublic({ ...row, players: '' }).minPlayers, toPublic({ ...row, players: '' }).maxPlayers], [null, null]);

@@ -108,7 +108,7 @@ export function die(front: number, top: number, side: number, body: string, pip:
 /** 솥에서 굴러 떨어지는 상아색 주사위. 표지가 없는 게임의 기본 그림으로도 씁니다. */
 export const IVORY_DIE = die(5, 2, 3, '#F4EAD2', '#2A1B2E');
 
-export const CATEGORY_COLOR: Record<string, string> = { 가족: '#C9963A', 파티: '#B84A42', 추상: '#7A58B8', 협력: '#3F8F68', 전략: '#3D6FA8' };
+export const CATEGORY_COLOR: Record<string, string> = { 가족: '#C9963A', 파티: '#B84A42', 협력: '#3F8F68', 전략: '#3D6FA8', 머더미스터리: '#7A58B8' };
 export const categoryColor = (cat: string) => CATEGORY_COLOR[cat] ?? '#6B5A70';
 
 const ICON_PAL: Record<string, string> = { w: '#FBF3DC', g: '#EBCB86', k: '#1B1220', r: '#D2505A', b: '#4E9FDB', c: '#A9D8F7', n: '#57C98A', p: '#9B6BE0', o: '#F0A23C', y: '#A8703F', s: '#B5B1BE' };

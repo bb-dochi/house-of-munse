@@ -20,6 +20,7 @@ export interface GameRow {
   purchase_price: number | null;
   sale_price: number | null;
   is_expansion: number | null;
+  best_players: string;
   base_game_id: string | null;
 }
 
@@ -32,6 +33,8 @@ export interface PublicGame {
   /** 인원을 모르면 null */
   minPlayers: number | null;
   maxPlayers: number | null;
+  /** BGG 유저 투표의 베스트 인원. 모르면 null */
+  bestPlayers: { min: number; max: number } | null;
   playTime: number;
   weight: number;
   rating: number;
@@ -39,8 +42,10 @@ export interface PublicGame {
   description: string;
   imageUrl: string | null;
   iconKey: string | null;
+  /** 소장은 하고 있지만 남에게 빌려준 상태 */
+  onLoan: boolean;
   /** 이 게임에 붙는 확장판. 확장판 자체는 공개 목록에 따로 나오지 않습니다. */
-  expansions: { id: string; nameKo: string }[];
+  expansions: { id: string; nameKo: string; onLoan: boolean }[];
 }
 
 export interface LedgerGame extends PublicGame {
@@ -70,6 +75,7 @@ export function toPublic(r: GameRow): PublicGame {
     nameEn: r.english_title,
     minPlayers: range?.min ?? null,
     maxPlayers: range?.max ?? null,
+    bestPlayers: parsePlayers(r.best_players ?? ''),
     playTime: minutes(r.play_time),
     weight: Number(r.weight),
     rating: Number(r.rating),
@@ -77,6 +83,7 @@ export function toPublic(r: GameRow): PublicGame {
     description: r.description,
     imageUrl: r.cover_image || null,
     iconKey: r.icon_key,
+    onLoan: r.status === '대여 중',
     expansions: [],
   };
 }
@@ -102,6 +109,7 @@ export function bggColumns(g: BggGame): Columns {
     category: g.category,
     description: g.description,
     cover_image: g.imageUrl ?? '',
+    best_players: g.bestPlayers,
   };
 }
 
@@ -114,6 +122,8 @@ export function toColumns(game: GamePatch, own: OwnershipPatch): Columns {
   if (game.rating !== undefined) c.rating = game.rating;
   if (game.category !== undefined) c.category = game.category;
   if (game.description !== undefined) c.description = game.description;
+  if (game.imageUrl !== undefined) c.cover_image = game.imageUrl;
+  if (game.bestPlayers !== undefined) c.best_players = game.bestPlayers;
   if (game.playTime !== undefined) c.play_time = playTimeColumn(game.playTime);
   if (own.recommendedPlayers !== undefined) {
     c.players = game.minPlayers !== undefined && game.maxPlayers !== undefined ? playersColumn(game.minPlayers, game.maxPlayers) : own.recommendedPlayers;

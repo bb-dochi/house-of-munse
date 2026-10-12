@@ -1,9 +1,10 @@
 // D1 읽기·쓰기. ORM 없이 SQL을 직접 씁니다 (house-of-munse2와 같은 방식).
+import { Buffer } from 'node:buffer';
 import type { BackupRow, ColumnInfo } from './backup';
 import { Columns, GameRow, LedgerGame, PublicGame, toLedger, toPublic } from './rows';
 
 const COLUMNS = `id, title, english_title, bgg_id, cover_image, players, play_time, weight, rating,
-  category, description, icon_key, status, purchase_price, sale_price, owned, disposed, is_expansion, base_game_id`;
+  category, description, icon_key, status, purchase_price, sale_price, owned, disposed, is_expansion, base_game_id, best_players`;
 
 // 선반 번호는 방출한 게임까지 포함한 등록 순서라, 한 게임을 방출해도 다른 게임 번호가 바뀌지 않습니다.
 const NUMBERED = `SELECT ${COLUMNS}, ROW_NUMBER() OVER (ORDER BY created_at, id) AS no FROM games`;
@@ -17,7 +18,7 @@ export async function shelf(db: D1Database): Promise<PublicGame[]> {
   for (const r of results) {
     const base = r.base_game_id ? games.get(r.base_game_id) : undefined;
     if (!base) continue;
-    base.expansions.push({ id: r.id, nameKo: r.title });
+    base.expansions.push({ id: r.id, nameKo: r.title, onLoan: r.status === '대여 중' });
     folded.add(r.id);
   }
   return [...games.values()].filter((g) => !folded.has(g.id));
@@ -81,6 +82,26 @@ export async function updateGame(db: D1Database, id: string, columns: Columns): 
 export async function deleteGame(db: D1Database, id: string): Promise<boolean> {
   const { meta } = await db.prepare('DELETE FROM games WHERE id = ?').bind(id).run();
   return meta.changes > 0;
+}
+
+// ---------- 장부에서 올린 표지. 표지 주소(cover_image)는 /api/covers/:id?v=… 로 이 표를 가리킵니다. ----------
+
+export async function cover(db: D1Database, gameId: string): Promise<{ mime: string; data: Uint8Array } | null> {
+  const row = await db.prepare('SELECT mime, data FROM covers WHERE game_id = ?').bind(gameId).first<{ mime: string; data: string }>();
+  return row ? { mime: row.mime, data: Uint8Array.from(atob(row.data), (c) => c.charCodeAt(0)) } : null;
+}
+
+/** D1 BLOB은 드라이버마다 돌려주는 모양이 달라 base64 글자로 저장합니다. */
+export async function saveCover(db: D1Database, gameId: string, mime: string, data: ArrayBuffer): Promise<void> {
+  const base64 = Buffer.from(data).toString('base64');
+  await db
+    .prepare('INSERT INTO covers (game_id, mime, data, updated_at) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(game_id) DO UPDATE SET mime = ?2, data = ?3, updated_at = ?4')
+    .bind(gameId, mime, base64, new Date().toISOString())
+    .run();
+}
+
+export async function deleteCover(db: D1Database, gameId: string): Promise<void> {
+  await db.prepare('DELETE FROM covers WHERE game_id = ?').bind(gameId).run();
 }
 
 interface PlayRow {
@@ -147,6 +168,8 @@ interface WishRow {
   expected_price: string;
   status: string;
   reason: string;
+  bgg_id: number;
+  image_url: string;
   is_sample: number;
 }
 
@@ -162,6 +185,8 @@ const toWish = (w: WishRow) => ({
   expectedPrice: w.expected_price,
   status: w.status,
   reason: w.reason,
+  bggId: w.bgg_id || null,
+  imageUrl: w.image_url || null,
   isSample: Boolean(w.is_sample),
 });
 

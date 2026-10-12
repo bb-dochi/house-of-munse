@@ -25,7 +25,9 @@ const ROUTES: [string, string, boolean, Handler][] = [
   ['GET', '/api/games', false, async ({ env, url }) => {
     const all = await db.shelf(env.DB);
     const q = (key: string) => url.searchParams.get(key) ?? undefined;
-    return { total: all.length, items: filterGames(all, { q: q('q'), players: q('players'), weight: q('weight'), category: q('category'), sort: q('sort') }) };
+    // 전체 수는 본판 카드에 묶인 확장판까지 센 상자 수입니다.
+    const total = all.reduce((n, g) => n + 1 + g.expansions.length, 0);
+    return { total, items: filterGames(all, { q: q('q'), players: q('players'), category: q('category'), sort: q('sort'), order: q('order') }) };
   }],
   ['GET', '/api/games/:id', false, async ({ env, id }) => (await db.shelfGame(env.DB, id)) ?? notFound()],
   ['GET', '/api/recommend', false, async ({ env, url }) => {
@@ -36,6 +38,11 @@ const ROUTES: [string, string, boolean, Handler][] = [
     if (!TIME_PREFS.includes(time as TimePref)) throw new HttpError(400, '시간 조건이 올바르지 않습니다.');
     if (!MOODS.includes(mood as Mood)) throw new HttpError(400, '기분 조건이 올바르지 않습니다.');
     return recommend(await db.shelf(env.DB), n, time as TimePref, mood as Mood);
+  }],
+  ['GET', '/api/covers/:id', false, async ({ env, id }) => {
+    const cover = (await db.cover(env.DB, id)) ?? notFound('표지가 없습니다.');
+    // 주소에 ?v=올린시각이 붙으므로 바뀌면 주소도 바뀝니다. 오래 캐시해도 됩니다.
+    return new Response(cover.data, { headers: { 'Content-Type': cover.mime, 'Cache-Control': 'public, max-age=31536000, immutable' } });
   }],
   ['GET', '/api/plays', false, ({ env }) => db.plays(env.DB)],
   ['GET', '/api/wishlist', false, ({ env }) => db.wishes(env.DB)],
@@ -58,6 +65,19 @@ const ROUTES: [string, string, boolean, Handler][] = [
     const patch = toPatch((await readJson(req)) as LedgerInput);
     if (typeof patch === 'string') throw new HttpError(400, patch);
     if (!(await db.updateGame(env.DB, id, toColumns(patch.game, patch.ownership)))) notFound();
+    // 다른 표지로 바꾸거나 지우면 올려 둔 표지 파일은 더 쓰지 않으니 지웁니다.
+    if (patch.game.imageUrl !== undefined && !patch.game.imageUrl.startsWith(`/api/covers/${encodeURIComponent(id)}?`)) await db.deleteCover(env.DB, id);
+    return db.ledgerGame(env.DB, id);
+  }],
+  ['PUT', '/api/admin/games/:id/cover', true, async ({ req, env, id }) => {
+    const mime = (req.headers.get('Content-Type') ?? '').split(';')[0].trim();
+    if (!COVER_TYPES.includes(mime)) throw new HttpError(400, '표지는 JPEG, PNG, WebP 이미지만 올릴 수 있습니다.');
+    const data = await req.arrayBuffer();
+    if (data.byteLength === 0) throw new HttpError(400, '이미지 파일이 비어 있습니다.');
+    if (data.byteLength > COVER_MAX_BYTES) throw new HttpError(413, '이미지가 너무 큽니다 (1MB 이하).');
+    if (!(await db.ledgerGame(env.DB, id))) notFound();
+    await db.saveCover(env.DB, id, mime, data);
+    await db.updateGame(env.DB, id, { cover_image: `/api/covers/${encodeURIComponent(id)}?v=${Date.now()}` });
     return db.ledgerGame(env.DB, id);
   }],
   ['DELETE', '/api/admin/games/:id', true, async ({ env, id }) => {
@@ -125,6 +145,12 @@ const ROUTES: [string, string, boolean, Handler][] = [
     return { ...(await db.importGames(env.DB, parsed.rows)), ignored: parsed.ignored };
   }],
   ['GET', '/api/admin/bgg/search', true, ({ env, url }) => searchBgg(url.searchParams.get('q') ?? '', env.BGG_TOKEN)],
+  // 위시처럼 장부에 넣지 않고 BGG 정보만 받아 칸을 채울 때 씁니다.
+  ['GET', '/api/admin/bgg/thing/:id', true, ({ env, id }) => {
+    const bggId = Number(id);
+    if (!Number.isInteger(bggId) || bggId <= 0) throw new HttpError(400, 'BGG 번호가 올바르지 않습니다.');
+    return fetchBggGame(bggId, env.BGG_TOKEN);
+  }],
   ['POST', '/api/admin/bgg/import', true, async ({ req, env }) => {
     const bggId = Number((await readJson(req)).bggId);
     if (!Number.isInteger(bggId) || bggId <= 0) throw new HttpError(400, 'BGG 번호가 올바르지 않습니다.');
@@ -136,6 +162,10 @@ const ROUTES: [string, string, boolean, Handler][] = [
     return db.ledgerGame(env.DB, id);
   }],
 ];
+
+const COVER_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+// 화면에서 긴 변 600px JPEG로 줄여 올리므로 보통 100KB 안쪽입니다. D1 한 행 한도(2MB)보다 넉넉히 작게 둡니다.
+const COVER_MAX_BYTES = 1024 * 1024;
 
 function notFound(message = '그 번호의 게임이 없습니다.'): never {
   throw new HttpError(404, message);

@@ -5,15 +5,24 @@ import { Band, Layout, LoadState } from "../components/Layout";
 import { categoryColor } from "../pixel";
 import { useLoad } from "../useLoad";
 
-const EMPTY = { q: "", players: "all", weight: "all", category: "all", sort: "no" };
+const EMPTY = { q: "", players: "all", category: "all", sort: "no", order: "asc" };
 const shelfNo = (no: number) => "HM-" + String(no).padStart(3, "0");
 
-function Stats({ g }: { g: Game }) {
+/** best를 켜면 인원 아래에 베스트 인원을 작게 붙입니다 (상세 창에서만). */
+function Stats({ g, best = false }: { g: Game; best?: boolean }) {
+    const star = best && g.bestPlayers ? (g.bestPlayers.min === g.bestPlayers.max ? `${g.bestPlayers.min}` : `${g.bestPlayers.min}–${g.bestPlayers.max}`) : null;
     return (
         <span className="stats">
             <span>
                 <span className="dim">인원</span>
-                <span className="v">{playersText(g)}</span>
+                <span className="v">
+                    {playersText(g)}
+                    {star && (
+                        <span className="best-sub" title="BGG 유저 투표 기준">
+                            베스트 {star}인
+                        </span>
+                    )}
+                </span>
             </span>
             <span>
                 <span className="dim">시간</span>
@@ -51,7 +60,8 @@ export function Collection() {
     }, [sel]);
 
     const items = data?.items ?? [];
-    const weightWord = (w: number) => (w < 2 ? "가벼운" : w < 3 ? "적당히 생각하는" : "묵직한");
+    // 전체 수(data.total)처럼 본판 카드에 묶인 확장판까지 상자 하나로 셉니다.
+    const boxes = items.reduce((n, g) => n + 1 + g.expansions.length, 0);
 
     return (
         <Layout page="collection" count={data?.total} footNote="게임 정보 출처: BoardGameGeek, 직접 입력">
@@ -63,7 +73,7 @@ export function Collection() {
                 aside={
                     data && (
                         <div className="g11 band-count">
-                            {items.length}
+                            {boxes}
                             <small> / {data.total} 상자</small>
                         </div>
                     )
@@ -76,48 +86,47 @@ export function Collection() {
                         <input className="fld" type="search" placeholder="게임 이름, 영문명" value={q} onChange={(e) => setQ(e.target.value)} />
                     </label>
                     <label>
-                        <span className="lab">인원</span>
-                        <select className="fld" value={f.players} onChange={set("players")}>
-                            <option value="all">전체</option>
-                            <option value="1">1인</option>
-                            <option value="2">2인</option>
-                            <option value="3">3인</option>
-                            <option value="4">4인</option>
-                            <option value="5">5인</option>
-                            <option value="6">6인 이상</option>
-                        </select>
-                    </label>
-                    <label>
-                        <span className="lab">난이도</span>
-                        <select className="fld" value={f.weight} onChange={set("weight")}>
-                            <option value="all">전체</option>
-                            <option value="light">가벼움 (2.0 미만)</option>
-                            <option value="mid">보통 (2.0–2.9)</option>
-                            <option value="heavy">묵직함 (3.0 이상)</option>
-                        </select>
-                    </label>
-                    <label>
                         <span className="lab">카테고리</span>
                         <select className="fld" value={f.category} onChange={set("category")}>
                             <option value="all">전체</option>
+                            <option value="전략">전략</option>
                             <option value="가족">가족</option>
                             <option value="파티">파티</option>
-                            <option value="추상">추상</option>
                             <option value="협력">협력</option>
-                            <option value="전략">전략</option>
+                            <option value="머더미스터리">머더미스터리</option>
                         </select>
                     </label>
                     <label>
-                        <span className="lab">정렬</span>
-                        <select className="fld" value={f.sort} onChange={set("sort")}>
-                            <option value="no">서가 번호순</option>
-                            <option value="name">이름순</option>
-                            <option value="rating">평점 높은 순</option>
-                            <option value="light">웨이트 가벼운 순</option>
-                            <option value="heavy">웨이트 무거운 순</option>
-                            <option value="time">시간 짧은 순</option>
+                        <span className="lab">인원</span>
+                        <select className="fld" value={f.players} onChange={set("players")}>
+                            <option value="all">전체</option>
+                            <option value="1-2">1–2인</option>
+                            <option value="3-4">3–4인</option>
+                            <option value="5-6">5–6인</option>
+                            <option value="7+">7인 이상</option>
                         </select>
                     </label>
+                    <div className="sort-field" role="group" aria-labelledby="sort-lab">
+                        <span className="lab" id="sort-lab">정렬</span>
+                        <span className="sort-row">
+                            <select className="fld" aria-label="정렬 기준" value={f.sort} onChange={set("sort")}>
+                                <option value="no">등록순</option>
+                                <option value="name">이름</option>
+                                <option value="rating">평점</option>
+                                <option value="weight">웨이트</option>
+                                <option value="time">시간</option>
+                            </select>
+                            <button
+                                type="button"
+                                className="btn order"
+                                aria-label={f.order === "asc" ? "오름차순, 눌러서 내림차순으로" : "내림차순, 눌러서 오름차순으로"}
+                                title={f.order === "asc" ? "오름차순" : "내림차순"}
+                                onClick={() => setF({ ...f, order: f.order === "asc" ? "desc" : "asc" })}
+                            >
+                                {f.order === "asc" ? "▲" : "▼"}
+                            </button>
+                        </span>
+                    </div>
                     <div className="end">
                         <button
                             type="button"
@@ -151,15 +160,17 @@ export function Collection() {
                             <span className="body">
                                 <span className="name">{g.nameKo}</span>
                                 <span className="sub">
-                                    <span className="dim">{g.nameEn}</span>
-                                    {g.category && (
-                                        <span className="cat" style={{ borderColor: categoryColor(g.category) }}>
-                                            {g.category}
-                                        </span>
-                                    )}
-                                    {g.expansions.length > 0 && <span className="cat">확장 {g.expansions.length}</span>}
+                                    <span className="dim en">{g.nameEn}</span>
+                                    <span className="tags">
+                                        {g.category && (
+                                            <span className="cat" style={{ borderColor: categoryColor(g.category) }}>
+                                                {g.category}
+                                            </span>
+                                        )}
+                                        {g.expansions.length > 0 && <span className="cat">확장 {g.expansions.length}</span>}
+                                        {g.onLoan && <span className="cat loan">대여 중</span>}
+                                    </span>
                                 </span>
-                                <span className="desc">{g.description}</span>
                                 <Stats g={g} />
                             </span>
                         </button>
@@ -182,26 +193,25 @@ export function Collection() {
                                     </div>
                                     <div className="name">{sel.nameKo}</div>
                                     <div className="dim">{[sel.nameEn, sel.category].filter(Boolean).join(" · ")}</div>
+                                    {sel.onLoan && <span className="cat loan" style={{ alignSelf: "flex-start" }}>대여 중 · 지금은 공방에 없어요</span>}
                                 </div>
                                 <button type="button" className="x" aria-label="닫기" autoFocus onClick={() => setSel(null)}>
                                     ✕
                                 </button>
                             </div>
-                            <p style={{ lineHeight: 1.8, color: "var(--text-2)" }}>{sel.description}</p>
-                            <Stats g={sel} />
+                            {sel.description && <p style={{ lineHeight: 1.8, color: "var(--text-2)" }}>{sel.description}</p>}
+                            <Stats g={sel} best />
                             {sel.expansions.length > 0 && (
                                 <div className="exps">
                                     <span className="dim">함께 있는 확장</span>
                                     <ul>
                                         {sel.expansions.map((e) => (
-                                            <li key={e.id}>{e.nameKo}</li>
+                                            <li key={e.id}>
+                                                {e.nameKo}
+                                                {e.onLoan && <span className="dim"> (대여 중)</span>}
+                                            </li>
                                         ))}
                                     </ul>
-                                </div>
-                            )}
-                            {sel.minPlayers !== null && sel.playTime > 0 && sel.weight > 0 && (
-                                <div className="when g11">
-                                    이럴 때 끓이세요: {playersText(sel)}이 모여 {sel.playTime}분쯤, {weightWord(sel.weight)} 판을 하고 싶을 때.
                                 </div>
                             )}
                         </div>
