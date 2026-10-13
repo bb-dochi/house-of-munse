@@ -4,6 +4,7 @@ import { Cover } from '../components/Cover';
 import { Layout } from '../components/Layout';
 import { categoryColor, die, IVORY_DIE, mapRows, paint, Rect, shade, Sprite, sprite, tint } from '../pixel';
 import { Link } from '../router';
+import { FRONT_FILTER, sceneUrl, useTimeOfDay } from '../timeOfDay';
 
 type Phase = 'raw' | 'pour' | 'done';
 type TimePref = 'any' | 'short' | 'mid' | 'long';
@@ -162,6 +163,8 @@ export function Home() {
   const timer = useRef<number>();
   const { cw, ch, hd } = useViewport();
   const L = layout(cw, ch, hd);
+  const tod = useTimeOfDay();
+  const scene = sceneUrl(tod);
 
   useEffect(() => () => window.clearTimeout(timer.current), []);
 
@@ -226,18 +229,18 @@ export function Home() {
 
   return (
     <Layout page="home" count={total} footer={false}>
-      <main className={`hero ${L.phone ? 'p' : 'd'}${done ? ' done' : ''}`} style={{ height: L.heroH }}>
+      <main className={`hero ${L.phone ? 'p' : 'd'}${done ? ' done' : ''} tod-${tod}`} style={{ height: L.heroH }}>
         <div className="scene" aria-hidden="true">
-          {L.wide && <div className="scene-fill" />}
+          {L.wide && <div className="scene-fill" style={{ backgroundImage: `url(${scene})` }} />}
           <div className={`stage${L.wide ? ' fade' : ''}`} style={{ left: L.stageL, top: L.stageT, transform: `scale(${L.sc.toFixed(4)})` }}>
-            <img src="/assets/atelier-back.png" alt="" />
+            <img src={scene} alt="" />
             <div style={{ left: '281em', top: '281em', width: '158em', height: '19em', background: potionBg }} />
             {done && game && (
               <div className="rising rise" key={`box-${game.id}-${k}`}>
                 <Cover imageUrl={game.imageUrl} />
               </div>
             )}
-            <img src="/assets/atelier-front.png" alt="" />
+            <img src="/assets/atelier-front.png" alt="" style={{ filter: FRONT_FILTER[tod] }} />
             <div className="fl1" style={{ left: '312em', top: '356em', width: '96em', height: '36em', background: FLAME_A }} />
             <div className="fl2" style={{ left: '312em', top: '356em', width: '96em', height: '36em', background: FLAME_B }} />
             {!done && (
@@ -265,7 +268,7 @@ export function Home() {
               <div key={i} className="bub" style={{ left: `${l}em`, top: `${t}em`, width: `${s}em`, height: `${s}em`, background: bubble, animationDelay: `${d}s` }} />
             ))}
             <div className="full glow" style={{ mixBlendMode: 'screen', background: 'radial-gradient(ellipse 170em 80em at 360em 404em, rgba(255,130,50,0.34), transparent 100%)' }} />
-            <div className="full" style={{ mixBlendMode: 'screen', background: `radial-gradient(ellipse 150em 80em at 360em 282em, ${pcol}${done ? 'B3' : '66'}, transparent 100%)` }} />
+            <div className="full" style={{ mixBlendMode: 'screen', background: `radial-gradient(ellipse 120em 46em at 360em 286em, ${pcol}${done ? '66' : '33'}, transparent 100%)` }} />
             <div className="full" style={{ background: 'radial-gradient(ellipse 150em 110em at 360em 118em, rgba(8,7,26,0.68), transparent 100%), linear-gradient(rgba(13,8,16,0.45), transparent 16%)' }} />
           </div>
         </div>

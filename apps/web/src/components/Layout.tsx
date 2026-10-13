@@ -1,5 +1,6 @@
 import { ReactNode } from 'react';
 import { Link } from '../router';
+import { sceneUrl, useTimeOfDay } from '../timeOfDay';
 
 type Page = 'home' | 'collection' | 'reviews' | 'wishlist' | 'mysteries' | 'admin';
 
@@ -43,8 +44,9 @@ export function Layout({ page, count, children, footNote, footer = true }: { pag
 }
 
 export function Band({ label, title, sub, pos, narrow, aside }: { label: string; title: string; sub: string; pos: string; narrow?: boolean; aside?: ReactNode }) {
+  const scene = sceneUrl(useTimeOfDay());
   return (
-    <section className="band" style={{ backgroundPosition: pos }}>
+    <section className="band" style={{ backgroundImage: `url(${scene})`, backgroundPosition: pos }}>
       <div className="band-in pad">
         <div className={'band-row ' + (narrow ? 'narrow' : '')}>
           <div className="band-text">

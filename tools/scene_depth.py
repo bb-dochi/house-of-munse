@@ -2,8 +2,10 @@
 # tools/scene.py의 도우미와 원래 안쪽 벽 그림(창문·배너·책장)을 그대로 가져와 안쪽 벽으로 쓰고,
 # 양옆 벽·바닥·천장을 평면 그림으로 그린 뒤 1점 투시로 투영합니다. 앞 레이어(atelier-front.png)는 scene.py가 만든 것을 그대로 씁니다.
 #
-# 실행 (저장소 루트에서):  python tools/scene_depth.py apps/web/public/assets/ [미리보기.png]
-#   첫 인자 폴더에 atelier-back.png를 쓰고, 둘째 인자를 주면 앞 레이어까지 합친 2배 미리보기를 저장합니다.
+# 실행 (저장소 루트에서):  python tools/scene_depth.py apps/web/public/assets/ [미리보기.png] [--time=all]
+#   첫 인자 폴더에 배경을 쓰고, 둘째 인자를 주면 앞 레이어까지 합친 2배 미리보기를 저장합니다.
+#   --time: night(기본, atelier-back.png) · morning · noon · sunset (atelier-back-<time>.png) · all(네 장 모두).
+#   시간대마다 창밖(하늘·해/달·구름·산·성·호수)과 조명만 바뀌고, 방 안의 물건은 같은 모습입니다.
 # 주의: scene.py를 줄 번호로 잘라 실행하므로 scene.py를 고치면 아래 seg(...) 줄 번호도 맞춰야 합니다.
 import sys, math
 from pathlib import Path
@@ -11,8 +13,36 @@ import numpy as np
 from PIL import Image
 
 ROOT = str(Path(__file__).resolve().parents[1])
-OUT = sys.argv[1] if len(sys.argv) > 1 else './'
-PREVIEW = sys.argv[2] if len(sys.argv) > 2 else None
+ARGS = [a for a in sys.argv[1:] if not a.startswith('--')]
+TIME = next((a.split('=', 1)[1] for a in sys.argv[1:] if a.startswith('--time=')), 'night')
+OUT = ARGS[0] if ARGS else './'
+PREVIEW = ARGS[1] if len(ARGS) > 1 else None
+if TIME == 'all':
+    import subprocess
+    for t in ('night', 'morning', 'noon', 'sunset'):
+        pv = [PREVIEW.replace('.png', f'-{t}.png')] if PREVIEW else []
+        subprocess.run([sys.executable, __file__, OUT, *pv, f'--time={t}'], check=True)
+    sys.exit(0)
+
+# 시간대별 창밖 색과 조명. night는 기본 그림 그대로입니다.
+SUN = {'morning': (300, 150), 'noon': (420, 52), 'sunset': (412, 196)}
+WINDOW_SKY = {
+    'morning': dict(sky=['#5C7FC0', '#6F92CC', '#86A6D6', '#A3B9DE', '#C3C9E0', '#E1CCD8', '#F2CFC4', '#F8D8B8', '#FBE3BE'], sun='#FFF1C8', halo='#F8D2B0',
+                    cloud=('#FFFFFF', '#F3DCE0'), ridge=('#8A98C0', '#F0F0F8', '#6E80A8', '#55688E'), castle='#4A4E72', lights=False,
+                    lake=['#9AB4DC', '#86A2D0', '#7290C2', '#6280B4'], ripple=['#B6CCEA', '#7E9AC8', '#A8BEE2'], glint='#FBE3BE', pine='#2E4A5A'),
+    'noon': dict(sky=['#3E7FD0', '#4A8AD6', '#579ADC', '#68A8E2', '#7AB6E8', '#8EC4EC', '#A6D2F0', '#BEDFF2', '#D2E9F4'], sun='#FFFBE8', halo='#CFE6FF',
+                 cloud=('#FFFFFF', '#E4EEF8'), ridge=('#7FA0C8', '#FFFFFF', '#5E8A6E', '#46704F'), castle='#4E5A78', lights=False,
+                 lake=['#6FA6DC', '#5A94D0', '#4A84C4', '#3C74B4'], ripple=['#9CC6EE', '#4E88C8', '#86B8E8'], glint='#FFFFFF', pine='#2E5A40'),
+    'sunset': dict(sky=['#2A2858', '#3E3270', '#5E3C84', '#8A4A8C', '#B85A82', '#DE7070', '#F08C5E', '#F7A858', '#FBC468'], sun='#FFC070', halo='#F08060',
+                   cloud=('#F6B08A', '#C86A7A'), ridge=('#6A4A80', '#F0A8A0', '#4E3866', '#3A2850'), castle='#2A1E40', lights=True,
+                   lake=['#C87A80', '#A45E78', '#7A4A6C', '#56385A'], ripple=['#E89A86', '#8E5070', '#D88878'], glint='#FBC468', pine='#2A1E36'),
+}
+LIGHTING = {  # 주변광, 창문 빛, 창문에서 바닥으로 오는 빛, 촛불·등불 세기, 거리 안개, 가장자리 어둡게
+    'night':   dict(amb=(0.40, 0.32, 0.51), win=(0.35, 0.40, 0.95), winI=0.85, winR=210, flr=(0.45, 0.55, 1.0), flrI=0.45, candle=1.0, fog=0.5, vg=0.48),
+    'sunset':  dict(amb=(0.56, 0.42, 0.46), win=(1.0, 0.55, 0.38), winI=1.0, winR=250, flr=(1.0, 0.55, 0.40), flrI=0.6, candle=0.85, fog=0.4, vg=0.42),
+    'morning': dict(amb=(0.66, 0.60, 0.66), win=(1.0, 0.86, 0.78), winI=0.9, winR=260, flr=(1.0, 0.85, 0.75), flrI=0.55, candle=0.45, fog=0.3, vg=0.32),
+    'noon':    dict(amb=(0.80, 0.76, 0.74), win=(1.0, 0.97, 0.92), winI=1.0, winR=300, flr=(1.0, 0.95, 0.90), flrI=0.6, candle=0.3, fog=0.25, vg=0.26),
+}[TIME]
 SRC = open(ROOT + '/tools/scene.py', encoding='utf8').read().split('\n')
 seg = lambda a, b: '\n'.join(SRC[a - 1:b])
 sys.argv = ['scene.py', ROOT + '/apps/web/src/pixel.ts', OUT]
@@ -52,6 +82,31 @@ for i in range(30):
     x, y = 344 - i, 40 + i // 2
     if sky[y, x]: B.px(x, y, ['#FFFFFF', '#FBF3DC', '#C4C0F5', '#9A96E0', '#6E69C0'][min(4, i // 6)], 1.0)
 ''', g)
+if TIME != 'night':
+    # 낮 시간대 창밖은 밤 창문 위에 다시 그립니다. 난수 상태를 되돌려 방 안 물건은 밤과 똑같이 둡니다.
+    P = WINDOW_SKY[TIME]; sx, sy = SUN[TIME]
+    wsrc = seg(85, 178).replace('cx, ay, RR, wbot = 360, 122, 96, 262', 'cx, ay, RR, wbot = 360, 134, 114, 262')
+    for a, b in [
+        ("['#0A0A20', '#0E0E2C', '#14133C', '#1C1A4E', '#272463', '#35307A', '#463D90', '#5E4FA4', '#7A62B0']", repr(P['sky'])),
+        ('for _ in range(220):', 'for _ in range(0):'),
+        ('for (x, y) in [(300, 60), (438, 118), (286, 132), (332, 44), (420, 168), (392, 96), (316, 100)]:', 'for (x, y) in []:'),
+        ('mm = ((XX - 418) ** 2 + (YY - 56) ** 2 <= 14 * 14) & ~((XX - 411) ** 2 + (YY - 51) ** 2 <= 13 * 13) & glass', f'mm = ((XX - {sx}) ** 2 + (YY - {sy}) ** 2 <= 13 * 13) & glass'),
+        ('halo = ((XX - 418) ** 2 + (YY - 56) ** 2 <= 24 * 24) & glass & (BAYF < 0.3)', f'halo = ((XX - {sx}) ** 2 + (YY - {sy}) ** 2 <= 26 * 26) & glass & (BAYF < 0.45)'),
+        ("B.mask(halo, '#2A2870', 1.0); B.mask(mm, '#F6ECC4', 1.0)", f"B.mask(halo, '{P['halo']}', 1.0); B.mask(mm, '{P['sun']}', 1.0)"),
+        ("'#3F3A8C' if i < 2 else '#2E2A72'", f"'{P['cloud'][0]}' if i < 2 else '{P['cloud'][1]}'"),
+        ("ridge(46, 22, '#3D3884', '#8580C8', 1.0); ridge(30, 14, '#2B2768', None, 2.4); ridge(14, 8, '#1B1947', None, 4.1)",
+         f"ridge(46, 22, '{P['ridge'][0]}', '{P['ridge'][1]}', 1.0); ridge(30, 14, '{P['ridge'][2]}', None, 2.4); ridge(14, 8, '{P['ridge'][3]}', None, 4.1)"),
+        ("CS = '#100F2A'", f"CS = '{P['castle']}'"),
+        ("B.vgrad(lake, 228, wbot, ['#231F5C', '#1C1A4E', '#15143E', '#100F30'], 1.0)", f"B.vgrad(lake, 228, wbot, {P['lake']!r}, 1.0)"),
+        ("pick(['#2E2B70', '#3A3684', '#17153E'])", f"pick({P['ripple']!r})"),
+        ("B.rect(414 + ri(-4, 2), y + 1, ri(4, 10), 1, '#D9CFA8', 1.0)", f"B.rect({sx - 4} + ri(-4, 2), y + 1, ri(4, 10), 1, '{P['glint']}', 1.0)"),
+        ("col='#0A0920'", f"col='{P['pine']}'"),
+    ]:
+        assert a in wsrc, a[:50]
+        wsrc = wsrc.replace(a, b)
+    if not P['lights']:  # 낮에는 성의 불빛과 호수의 따뜻한 반사가 없습니다
+        wsrc = wsrc.replace("'#F6C56B', 1.0)", "CS, 1.0)").replace("[(326, '#C9963A'), (346, '#B88A3A'), (306, '#B88A3A')]", f"[(326, '{P['ripple'][0]}'), (346, '{P['ripple'][0]}'), (306, '{P['ripple'][0]}')]")
+    st = g['R'].getstate(); exec(wsrc, g); g['R'].setstate(st)
 exec(seg(179, 195).replace('(212, 476)', '(186, 494)'), g)  # banners only, moved out for the bigger window (no back-wall sconces)
 exec(seg(203, 367).replace('shelf(0, 190)', 'shelf(0, 174)').replace('shelf(530, 190,', 'shelf(546, 174,'), g)                          # shelves, cat, vines, herbs, sill props
 BACK = g['B']
@@ -236,7 +291,7 @@ for (dd, wx) in ((160, -170), (160, 170), (300, -170), (300, 170)):
     hang = 70 * s; sc = 2.4 * s
     S.rect(lx, cyl, 1, hang, '#2A1712')
     scaled_sprite(g['LANT'], g['LP'], g['LE'], lx, cyl + hang, sc)
-    lamps.append((lx, cyl + hang + 10 * sc, 100 * s, 0.55, (1.0, 0.70, 0.38)))
+    lamps.append((lx, cyl + hang + 10 * sc, 100 * s, 0.55 * LIGHTING['candle'], (1.0, 0.70, 0.38)))
 
 # ---------- floor props deeper in the room ----------
 def grab(draw):
@@ -293,7 +348,7 @@ prop_lights = []
 for draw, X, dd in sorted(props, key=lambda t: -t[2]):
     R.seed(int(dd) + int(X))
     cx_, top, s = place(grab(draw), X, FOC + dd)
-    if draw is candelabra: prop_lights.append((cx_, top + 6 * s, 80 * s, 0.5, (1.0, 0.70, 0.38)))
+    if draw is candelabra: prop_lights.append((cx_, top + 6 * s, 80 * s, 0.5 * LIGHTING['candle'], (1.0, 0.70, 0.38)))
 
 # dice dropped around the floor (different faces, sized by depth)
 PIPS = {1: [(3, 3)], 2: [(1, 1), (5, 5)], 3: [(1, 1), (3, 3), (5, 5)], 4: [(1, 1), (1, 5), (5, 1), (5, 5)], 5: [(1, 1), (1, 5), (3, 3), (5, 1), (5, 5)], 6: [(1, 1), (1, 3), (1, 5), (5, 1), (5, 3), (5, 5)]}
@@ -367,31 +422,31 @@ exec(seg(399, 400).replace('B.', 'S.'), {**g, 'S': S})
 def wall_pt(u, v, right):
     d = FOC + (DEPTH - u if right else u); s = FOC / d
     return (VX + (1 if right else -1) * VX * s, VY + (v - TOPH) * s, s)
-LIGHTS = [(360, 398, 310, 1.45, (1.0, 0.55, 0.26)), (360, 300, 300, 0.35, (1.0, 0.66, 0.40)), (66, 392, 130, 0.95, (1.0, 0.72, 0.40)), (672, 404, 150, 1.05, (1.0, 0.70, 0.36)), (150, 440, 90, 0.5, (0.7, 0.5, 1.0)),
-          (VX, by0 + 190 / ZB, 210, 0.85, (0.35, 0.40, 0.95)), (VX, 330, 150, 0.45, (0.45, 0.55, 1.0)),
+LIGHTS = [(360, 398, 310, 1.45, (1.0, 0.55, 0.26)), (360, 300, 300, 0.35, (1.0, 0.66, 0.40)), (66, 392, 130, 0.95 * LIGHTING['candle'], (1.0, 0.72, 0.40)), (672, 404, 150, 1.05 * LIGHTING['candle'], (1.0, 0.70, 0.36)), (150, 440, 90, 0.5, (0.7, 0.5, 1.0)),
+          (VX, by0 + 190 / ZB, LIGHTING['winR'], LIGHTING['winI'], LIGHTING['win']), (VX, 330, 150, LIGHTING['flrI'], LIGHTING['flr']),
           ] + lamps + prop_lights
 bay = DEPTH // 3
 for b in range(4):
     for right in (False, True):
         u = min(b * bay, DEPTH - 18) + 9
         px_, py_, s = wall_pt(DEPTH - u if right else u, 192, right)
-        LIGHTS.append((px_, py_, 80 * s, 0.45, (1.0, 0.72, 0.40)))
-amb = np.array([0.40, 0.32, 0.51])
+        LIGHTS.append((px_, py_, 80 * s, 0.45 * LIGHTING['candle'], (1.0, 0.72, 0.40)))
+amb = np.array(LIGHTING['amb'])
 Lm = np.zeros((H, W, 3)) + amb
 for (lx, ly, rad, inten, col) in LIGHTS:
     d = np.sqrt((XX - lx) ** 2 + ((YY - ly) * 1.1) ** 2) / rad
     f = np.clip(1 - d, 0, 1) ** 1.7 * inten
     Lm += (np.floor(f * 7 + BAYF) / 7)[..., None] * np.array(col)
 fog = np.clip((Z - 1) / (ZB - 1), 0, 1)
-fq = np.floor(fog * 0.5 * 6 + BAYF) / 6
+fq = np.floor(fog * LIGHTING['fog'] * 6 + BAYF) / 6
 Lm *= (1 - fq)[..., None]
-vg = np.clip((np.sqrt(((XX - 360) / 360.0) ** 2 + ((YY - 300) / 260.0) ** 2) - 0.45) * 1.3, 0, 0.48)  # darker toward the edges so the cauldron and window carry the light
+vg = np.clip((np.sqrt(((XX - 360) / 360.0) ** 2 + ((YY - 300) / 260.0) ** 2) - 0.45) * 1.3, 0, LIGHTING['vg'])  # darker toward the edges so the cauldron and window carry the light
 Lm *= (1 - np.floor(vg * 6 + BAYF) / 6)[..., None]
 out = S.c * Lm
 out = S.c * S.em[..., None] + out * (1 - S.em[..., None])
 back = np.clip(out, 0, 255).astype(np.uint8)
 
-Image.fromarray(back, 'RGB').save(str(Path(OUT) / 'atelier-back.png'))
+Image.fromarray(back, 'RGB').save(str(Path(OUT) / ('atelier-back.png' if TIME == 'night' else f'atelier-back-{TIME}.png')))
 front = np.array(Image.open(ROOT + '/apps/web/public/assets/atelier-front.png').convert('RGBA'))
 comp = back.copy(); a = front[..., 3] > 0; comp[a] = front[..., :3][a]
 if PREVIEW: Image.fromarray(comp).resize((W * 2, H * 2), Image.NEAREST).save(PREVIEW)

@@ -100,11 +100,13 @@ label.btn:focus-within{outline:2px solid var(--gold-line)}
 .rising{left:296em;top:197em;width:128em;height:81em;display:flex;justify-content:center;align-items:flex-end}
 .rising img{max-width:100%;max-height:100%;box-shadow:3em 3em 0 rgba(0,0,0,.35)}
 .rising .cover.blank{font-size:7em}
-.ov-title{position:absolute;left:0;right:0;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;text-shadow:3px 3px 0 #0D0810}
+.ov-title{position:absolute;left:0;right:0;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;text-shadow:3px 3px 0 #0D0810,1px 0 0 #0D0810,-1px 0 0 #0D0810,0 1px 0 #0D0810,0 -1px 0 #0D0810}
 .ov-title h1{font-weight:400;line-height:1.2;letter-spacing:.02em;color:var(--text-hi)}
 .ov-title h1 span{color:var(--gold)}
 .ov-title .pre{letter-spacing:.2em;color:var(--text)}
 .ov-title p{color:var(--text-2)}
+/* 밝은 시간대 배경에서는 창밖이 밝아 부제목 뒤에 옅은 어두운 띠를 깝니다 */
+.hero:not(.tod-night) .ov-title p{padding:2px 12px;background:rgba(13,8,16,.55)}
 .ov-tl,.ov-tr{position:absolute;top:28px;font-size:12px;letter-spacing:.14em}
 .ov-tl{left:clamp(12px,3.9vw,56px);color:var(--gold-dim)}
 .ov-tr{right:clamp(12px,3.9vw,56px);color:var(--dim)}
