@@ -121,14 +121,16 @@ function layout(cw: number, ch: number, hd: number) {
   const heroH = phone ? Math.round(Math.max(520, Math.min(ch - hd, 900))) : Math.round(Math.max(minH, Math.min((960 * cw) / 1440, Math.max(minH, ch - hd))));
   // 가로로 긴 화면에서도 그림 높이의 78%는 보이도록 확대를 제한하고, 남는 양옆은 흐린 배경으로 채웁니다.
   const sc = Math.max(heroH / 960, Math.min(cw / 1440, heroH / (960 * 0.78)));
-  // 창문 아치(그림 위에서 30px쯤)가 잘리지 않도록 위는 20px까지만 자르고, 나머지는 바닥 쪽에서 자릅니다.
-  const stageT = Math.round(Math.max(heroH - 960 * sc, -20 * sc));
+  // 넘치는 높이는 천장 2 : 바닥 1로 나눠 자릅니다. 위 확대 제한(22%)까지 잘라도 창문 아치(그림 위에서 약 220px)는 남습니다.
+  const stageT = Math.round(Math.min(0, heroH - 960 * sc) * (2 / 3));
   const stageL = Math.round((cw - 1440 * sc) / 2);
   // 패널은 솥 가장자리(그림 기준 중심에서 210px)에서 40px 떨어진 곳에 붙이되, 화면 밖으로 나가지 않게 합니다.
   const sideMin = Math.min(56, Math.max(12, Math.round(cw * 0.039)));
   const beside = (w: number) => Math.round(Math.max(sideMin, cw / 2 - 250 * sc - w * u));
   const titleFs = phone ? (heroH < 700 || cw < 360 ? 30 : 36) : Math.max(20, Math.round(60 * Math.min(1, heroH / 960)));
-  const panelTop = Math.round(16 + titleFs * 2.4 + 40);
+  // 제목 위 여백. 폰 패널 위치도 이 값에 맞춰 내려갑니다.
+  const titleGap = phone ? 28 : Math.round(44 * u);
+  const panelTop = Math.round(titleGap + titleFs * 2.4 + 40);
   const rightTop = phone ? panelTop : Math.round(Math.max(72 * u, Math.min(heroH * 0.41, heroH - 520 * u)));
   return {
     phone, u, heroH, sc, stageT, titleFs, panelTop,
@@ -136,7 +138,7 @@ function layout(cw: number, ch: number, hd: number) {
     wide: stageL > 0,
     leftX: beside(264),
     rightX: beside(320),
-    titleTop: phone ? 16 : Math.max(Math.round(20 * u), Math.round(stageT + 170 * sc)),
+    titleTop: phone ? titleGap : Math.max(titleGap, Math.round(stageT + 170 * sc) + Math.round(24 * u)),
     subFs: phone ? 12 : Math.max(10, Math.round(15 * u)),
     eyebrow: !phone && heroH >= 700 * u,
     rightTop,
@@ -219,7 +221,7 @@ export function Home() {
   const potionBg = useMemo(() => potion(done ? shade(pcol, 1.15) : pcol), [pcol, done]);
   const bubble = shade(pcol, 1.5);
   const fit = !cur || !rec ? '' : cur.score === rec.full ? (rec.full ? '고른 재료에 모두 맞는 한 판이에요.' : '인원에 맞는 판 가운데 평점이 가장 높아요.') : cur.score > 0 ? '재료가 조금 달라요. 인원과 일부 조건만 맞췄어요.' : '딱 맞는 판이 없어 인원만 맞췄어요.';
-  const hint = error ? error : !rec ? '재료를 손질하는 중…' : !pool.length ? '이 인원에 맞는 상자가 선반에 없어요.' : done ? '재료를 바꾸면 솥이 다시 비워져요.' : pouring ? '주사위가 솥으로 떨어지는 중…' : '재료 준비 끝. 주사위를 뿌려요.';
+  const hint = error ? error : !rec ? '재료를 손질하는 중…' : !pool.length ? '이 인원에 맞는 상자가 없어요.' : done ? '재료를 바꾸면 솥이 다시 비워져요.' : pouring ? '주사위가 솥으로 떨어지는 중…' : '재료 준비 끝. 주사위를 뿌려요.';
   const uiT = L.phone ? undefined : `scale(${L.u.toFixed(3)})`;
 
   return (
@@ -286,7 +288,6 @@ export function Home() {
             <h2>
               <span aria-hidden="true">✦ </span>오늘의 재료
             </h2>
-            <div className="dim" style={{ letterSpacing: '.16em' }}>INGREDIENTS</div>
           </div>
           <div className="ing-field ing-people" role="group" aria-label="함께할 사람">
             <div className="lab ing-lab">함께할 사람 (미플)</div>

@@ -100,5 +100,5 @@ npm run dev                                       # http://localhost:5173 (화�
 
 ## 그림과 글꼴
 
-- 배경 그림은 `tools/scene.py`로 생성한 것입니다 (Python, numpy, Pillow).
+- 배경 그림은 `tools/scene.py`로 생성한 것입니다 (Python, numpy, Pillow). 메인 화면의 원근 배경(`atelier-back.png`)은 `tools/scene_depth.py`가 scene.py의 그림을 가져와 1점 투시 방으로 다시 그립니다: `python tools/scene_depth.py apps/web/public/assets/`
 - 글꼴: [Galmuri](https://github.com/quiple/galmuri) (SIL Open Font License 1.1). 라이선스 전문은 `apps/web/public/assets/Galmuri-LICENSE.md`.
