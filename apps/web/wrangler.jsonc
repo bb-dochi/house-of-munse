@@ -10,6 +10,9 @@
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/*"]
   },
+  // 공방지기 질문(/api/ask). 무료 플랜이라 하루 무료 사용량을 넘으면 과금되지 않고 요청이 실패합니다.
+  // AI 연결은 로컬 개발에서도 실제 Workers AI를 부릅니다 (무료 사용량에서 차감).
+  "ai": { "binding": "AI", "remote": true },
   "d1_databases": [
     {
       "binding": "DB",

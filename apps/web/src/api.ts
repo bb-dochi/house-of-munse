@@ -146,9 +146,71 @@ async function send(path: string, init: RequestInit = {}, admin = false): Promis
   return res;
 }
 
+/** 내가 남긴 질문 (확인 링크로 보는 모양) */
+export interface MyQuestion {
+  name: string;
+  body: string;
+  answer: string;
+  answered: boolean;
+  createdAt: string;
+  answeredAt: string;
+}
+
+export interface PublicQna {
+  id: number;
+  name: string;
+  body: string;
+  answer: string;
+  answeredAt: string;
+}
+
+export interface AdminQuestion {
+  id: number;
+  name: string;
+  body: string;
+  answer: string;
+  status: 'new' | 'answered' | 'hidden';
+  allowPublic: boolean;
+  published: boolean;
+  createdAt: string;
+  answeredAt: string;
+}
+
+export interface AskMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+/** 공방지기에게 묻습니다. 답은 글자가 오는 대로 onText로 넘기고, 다 받은 답과 오늘 남은 횟수를 돌려줍니다. */
+async function ask(question: string, history: AskMessage[], onText: (soFar: string) => void): Promise<{ answer: string; left: number | null }> {
+  const res = await send('/ask', { method: 'POST', body: JSON.stringify({ question, history }) });
+  const left = res.headers.get('X-Ask-Left');
+  const reader = res.body?.getReader();
+  const dec = new TextDecoder();
+  let answer = '';
+  if (reader) {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      answer += dec.decode(value, { stream: true });
+      onText(answer);
+    }
+  }
+  return { answer: answer.trim(), left: left === null ? null : Number(left) };
+}
+
 const qs = (o: Record<string, string | number>) => new URLSearchParams(Object.entries(o).map(([k, v]) => [k, String(v)])).toString();
 
 export const api = {
+  ask,
+  leaveQuestion: (data: { name: string; body: string; allowPublic: boolean; website: string }) =>
+    call<{ token: string }>('/questions', { method: 'POST', body: JSON.stringify(data) }),
+  myQuestion: (token: string) => call<MyQuestion>(`/questions/${encodeURIComponent(token)}`),
+  qna: () => call<PublicQna[]>('/qna'),
+  questions: () => call<AdminQuestion[]>('/admin/questions', {}, true),
+  updateQuestion: (id: number, data: Partial<Pick<AdminQuestion, 'answer' | 'status' | 'published'>>) =>
+    call<AdminQuestion>(`/admin/questions/${id}`, { method: 'PATCH', body: JSON.stringify(data) }, true),
+  deleteQuestion: (id: number) => call<{ ok: true }>(`/admin/questions/${id}`, { method: 'DELETE' }, true),
   games: (query: Record<string, string>) => call<{ total: number; items: Game[] }>(`/games?${qs(query)}`),
   recommend: (players: number, time: string, mood: string) => call<Recommendation>(`/recommend?${qs({ players, time, mood })}`),
   plays: () => call<Play[]>('/plays'),
@@ -188,8 +250,8 @@ export const api = {
 };
 
 export const playersText = (g: Pick<Game, 'minPlayers' | 'maxPlayers'>) =>
-  g.minPlayers === null || g.maxPlayers === null ? '인원 미정' : g.minPlayers === g.maxPlayers ? `${g.minPlayers}인` : `${g.minPlayers}–${g.maxPlayers}인`;
-export const timeText = (g: Pick<Game, 'playTime'>) => (g.playTime ? `${g.playTime}분` : '시간 미정');
+  g.minPlayers === null || g.maxPlayers === null ? '-' : g.minPlayers === g.maxPlayers ? `${g.minPlayers}인` : `${g.minPlayers}–${g.maxPlayers}인`;
+export const timeText = (g: Pick<Game, 'playTime'>) => (g.playTime ? `${g.playTime}분` : '-');
 /** 웨이트는 소수 둘째 자리까지, 반올림하지 않고 잘라서 보여 줍니다 (2.4863 → 2.48). */
 export const weightNumber = (w: number) => (Math.floor(w * 100 + 1e-6) / 100).toFixed(2);
 export const weightText = (g: Pick<Game, 'weight'>) => (g.weight ? weightNumber(g.weight) : '-');

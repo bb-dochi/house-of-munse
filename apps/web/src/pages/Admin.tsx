@@ -2,6 +2,7 @@ import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
 import { api, ApiError, auth, LedgerRow, weightNumber } from "../api";
 import { BggSearch } from "../components/BggSearch";
 import { Cover } from "../components/Cover";
+import { Inbox } from "../components/Inbox";
 import { Layout } from "../components/Layout";
 import { categoryColor } from "../pixel";
 
@@ -36,7 +37,7 @@ const toRow = (g: LedgerRow): Row => {
 const BLANK: Record<Field, string> = { nameKo: "", weight: "", category: "", recommendedPlayers: "", purchasePrice: "", sellPrice: "", status: "보유" };
 
 type SortKey = "no" | Field;
-/** 정렬 값. 빈 값(null)은 방향과 상관없이 맨 아래로 보냅니다. */
+/** 정렬 값. 빈 값(null, 미정)은 가장 큰 값으로 쳐서 오름차순이면 맨 아래, 내림차순이면 맨 위로 갑니다. */
 const sortValue = (r: Row, key: SortKey): string | number | null => {
     const g = r.game;
     switch (key) {
@@ -60,7 +61,7 @@ const sortValue = (r: Row, key: SortKey): string | number | null => {
 function compareRows(a: Row, b: Row, key: SortKey, dir: 1 | -1): number {
     const x = sortValue(a, key);
     const y = sortValue(b, key);
-    if (x === null || y === null) return x === y ? a.no - b.no : x === null ? 1 : -1;
+    if (x === null || y === null) return x === y ? a.no - b.no : x === null ? dir : -dir;
     const c = typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), "ko");
     return dir * c || a.no - b.no;
 }
@@ -406,7 +407,10 @@ export function Admin() {
     const list = rows ?? [];
     const added = fresh.map((id) => list.find((r) => r.id === id)).filter((r): r is Row => !!r);
     const sorted = list.filter((r) => !fresh.includes(r.id)).sort((a, b) => compareRows(a, b, sort.key, sort.dir));
-    const sum = (key: Field) => list.reduce((a, r) => a + (Number(r.saved[key].replace(/[^0-9]/g, "")) || 0), 0);
+    const sum = (key: Field, rs = list) => rs.reduce((a, r) => a + (Number(r.saved[key].replace(/[^0-9]/g, "")) || 0), 0);
+    // 방출 가격이 적힌 게임만 모아, 그 게임들을 얼마에 샀는지와 비교합니다.
+    const sold = list.filter((r) => r.saved.sellPrice.trim());
+    const soldGap = sum("sellPrice", sold) - sum("purchasePrice", sold);
     const count = (...statuses: string[]) => list.filter((r) => statuses.includes(r.saved.status)).length;
     const editing = coverOf ? list.find((r) => r.id === coverOf) : undefined;
 
@@ -516,6 +520,7 @@ export function Admin() {
                             <p>칸을 고치고 다른 곳을 누르면 바로 저장됩니다. 열 이름을 누르면 정렬되고, 표지 칸을 누르면 표지·한 줄 설명·베스트 인원을 고치는 상세 창이 열립니다.</p>
                         </div>
                         <div className="adm-actions">
+                            <Inbox />
                             <button type="button" className="btn" onClick={() => exportAs("csv")}>
                                 CSV 내보내기
                             </button>
@@ -560,6 +565,9 @@ export function Admin() {
                         <div className="tile">
                             <span className="dim">방출 가격 합계</span>
                             <b>{won(sum("sellPrice"))}</b>
+                            {sold.length > 0 && (
+                                <span className="tile-sub">(손익 {(soldGap > 0 ? "+" : soldGap < 0 ? "−" : "") + won(Math.abs(soldGap))})</span>
+                            )}
                         </div>
                     </div>
 

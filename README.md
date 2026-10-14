@@ -40,7 +40,7 @@ npm run dev                                       # http://localhost:5173 (화�
 
 배포한 DB에는 같은 명령의 `:remote` 버전(`db:import:remote`, `db:bgg:remote`)을 씁니다.
 
-- 인원을 모르는 게임은 컬렉션에 "인원 미정"으로 보이고, 솥 추천과 인원 검색에서는 빠집니다. 어드민 장부에서 인원을 채우면 들어갑니다.
+- 인원을 모르는 게임은 컬렉션에 인원이 "-"로 보이고, 솥 추천과 인원 검색에서는 빠집니다. 어드민 장부에서 인원을 채우면 들어갑니다.
 
 ## 배포 (Cloudflare Workers + D1)
 
@@ -83,6 +83,11 @@ npm run dev                                       # http://localhost:5173 (화�
 | `GET /api/games/:id` | 게임 하나 |
 | `GET /api/recommend?players&time&mood` | 솥 추천. 인원 필수, 기분 2점, 시간 1점 |
 | `GET /api/plays`, `GET /api/wishlist` | 후기, 위시리스트 |
+| `POST /api/ask` | `{question, history}` → 공방지기 답(글자 스트림). Workers AI(`gemma-4-26b-a4b-it`)에 공개 컬렉션 목록을 넣어 묻습니다. 하루 전체 100회, 방문자(IP 해시)별 30회. 무료 사용량을 넘으면 503 |
+| `POST /api/questions` | 문세에게 직접 묻기 `{name, body, allowPublic}` → `{token}`. 방문자별 하루 5개. `DISCORD_WEBHOOK_URL`이 있으면 디스코드로 알림 |
+| `GET /api/questions/:token` | 내가 남긴 질문과 답 (답변 확인 링크 `/ask?q=…`) |
+| `GET /api/qna` | 문세가 공개로 고른 질문과 답 |
+| `GET/PATCH/DELETE /api/admin/questions[/:id]` | 관리 페이지 질문함: 답변·숨기기·공개 Q&A 올리기·삭제 |
 | `POST /api/auth/login` | `{password}` → `{token}` (12시간) |
 | `GET /api/admin/ledger` | 장부 (가격 포함, 로그인 필요) |
 | `POST/PATCH/DELETE /api/admin/games[/:id]` | 장부 추가·수정·삭제 |

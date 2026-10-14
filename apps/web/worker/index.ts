@@ -1,4 +1,5 @@
 // /api/* 요청을 처리하는 Worker. 화면 파일은 Cloudflare 정적 자산이 바로 내려 줍니다 (wrangler.jsonc의 assets).
+import { ASK_MODEL, AskMessage, DAILY_LIMIT, kstDay, PER_IP_LIMIT, readAsk, sseToText, systemPrompt } from './ask';
 import { Format, normalizeRows, readBackup, toCsv } from './backup';
 import { fetchBggGame, searchBgg } from './bgg';
 import * as db from './db';
@@ -6,15 +7,19 @@ import { HttpError, json, readJson } from './http';
 import { toMysteryColumns, toPlayColumns, toWishColumns } from './entries';
 import { LedgerInput, toPatch } from './ledger';
 import { filterGames, Mood, MOODS, recommend, TimePref, TIME_PREFS } from './logic';
+import { discordMessage, QUESTIONS_PER_IP, readAnswer, readQuestion, toAdmin, toMine, toPublic } from './questions';
 import { bggColumns, toColumns } from './rows';
 import { issueToken, samePassword, verifyToken } from './token';
 
 export interface Env {
   DB: D1Database;
+  AI: Ai;
   ASSETS: Fetcher;
   ADMIN_PASSWORD?: string;
   TOKEN_SECRET?: string;
   BGG_TOKEN?: string;
+  /** 새 질문 알림을 보낼 디스코드 웹후크 주소. 없으면 알림 없이 저장만 합니다. */
+  DISCORD_WEBHOOK_URL?: string;
 }
 
 type Handler = (ctx: { req: Request; env: Env; url: URL; id: string }) => Promise<unknown> | unknown;
@@ -47,6 +52,13 @@ const ROUTES: [string, string, boolean, Handler][] = [
   ['GET', '/api/plays', false, ({ env }) => db.plays(env.DB)],
   ['GET', '/api/wishlist', false, ({ env }) => db.wishes(env.DB)],
   ['GET', '/api/mysteries', false, ({ env }) => db.mysteries(env.DB)],
+  ['POST', '/api/ask', false, ({ req, env }) => ask(req, env)],
+  ['POST', '/api/questions', false, ({ req, env, url }) => leaveQuestion(req, env, url)],
+  ['GET', '/api/questions/:id', false, async ({ env, id }) => {
+    const row = await db.questionByToken(env.DB, id);
+    return row ? toMine(row) : notFound('그 질문을 찾을 수 없어요. 링크를 다시 확인해 주세요.');
+  }],
+  ['GET', '/api/qna', false, async ({ env }) => (await db.publicQuestions(env.DB)).map(toPublic)],
   ['POST', '/api/auth/login', false, async ({ req, env }) => {
     if (!env.ADMIN_PASSWORD || !env.TOKEN_SECRET) throw new HttpError(503, '서버에 ADMIN_PASSWORD와 TOKEN_SECRET이 설정되지 않았습니다.');
     const { password } = await readJson(req);
@@ -54,6 +66,14 @@ const ROUTES: [string, string, boolean, Handler][] = [
     return { token: issueToken(env.TOKEN_SECRET) };
   }],
   ['GET', '/api/admin/ledger', true, ({ env }) => db.ledger(env.DB)],
+  ['GET', '/api/admin/questions', true, async ({ env }) => (await db.allQuestions(env.DB)).map(toAdmin)],
+  ['PATCH', '/api/admin/questions/:id', true, async ({ req, env, id }) => {
+    const n = entryId(id);
+    const row = (await db.questionById(env.DB, n)) ?? noEntry();
+    await db.updateQuestion(env.DB, n, valid(readAnswer(await readJson(req), row)));
+    return toAdmin((await db.questionById(env.DB, n))!);
+  }],
+  ['DELETE', '/api/admin/questions/:id', true, async ({ env, id }) => ((await db.deleteQuestion(env.DB, entryId(id))) ? { ok: true } : noEntry())],
   ['POST', '/api/admin/games', true, async ({ req, env }) => {
     const input = (await readJson(req)) as LedgerInput;
     const patch = toPatch({ nameKo: '', ...input });
@@ -166,6 +186,69 @@ const ROUTES: [string, string, boolean, Handler][] = [
 const COVER_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 // 화면에서 긴 변 600px JPEG로 줄여 올리므로 보통 100KB 안쪽입니다. D1 한 행 한도(2MB)보다 넉넉히 작게 둡니다.
 const COVER_MAX_BYTES = 1024 * 1024;
+
+/** 방문자 IP를 비밀값과 섞은 해시 앞부분. IP 원문은 저장하지 않습니다. */
+async function visitorKey(req: Request, env: Env): Promise<string> {
+  const ip = req.headers.get('CF-Connecting-IP') ?? 'local';
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${env.TOKEN_SECRET ?? ''}:${ip}`));
+  return [...new Uint8Array(digest).slice(0, 8)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** 문세에게 직접 남기는 질문. 저장한 뒤 디스코드로 알리고, 답을 확인할 열쇠(token)를 돌려줍니다. */
+async function leaveQuestion(req: Request, env: Env, url: URL) {
+  const q = valid(readQuestion(await readJson(req)));
+  const token = crypto.randomUUID().replace(/-/g, '');
+  // 봇은 저장하지 않지만 성공한 것처럼 답해 다시 시도하지 않게 합니다.
+  if (q.bot) return { token };
+  const day = kstDay();
+  const bucket = ['q:' + (await visitorKey(req, env))];
+  const [mine] = await db.bumpAsk(env.DB, day, bucket);
+  if (mine > QUESTIONS_PER_IP) {
+    await db.unbumpAsk(env.DB, day, bucket);
+    throw new HttpError(429, `질문은 하루 ${QUESTIONS_PER_IP}개까지 남길 수 있어요. 내일 다시 남겨 주세요.`);
+  }
+  await db.insertQuestion(env.DB, { token, ...q });
+  if (env.DISCORD_WEBHOOK_URL) {
+    // 알림이 실패해도 질문은 이미 저장됐으니 방문자에게는 성공으로 답합니다.
+    try {
+      const res = await fetch(env.DISCORD_WEBHOOK_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(discordMessage(q, `${url.origin}/admin`)) });
+      if (!res.ok) console.error('디스코드 알림 실패', res.status);
+    } catch (e) {
+      console.error('디스코드 알림 실패', e);
+    }
+  }
+  return { token };
+}
+
+/** 공방지기 질문. 하루 상한과 방문자별 상한을 먼저 세고, 답은 글자가 나오는 대로 흘려 보냅니다. */
+async function ask(req: Request, env: Env): Promise<Response> {
+  const input = valid(readAsk(await readJson(req)));
+  const day = kstDay();
+  const buckets = ['all', 'ip:' + (await visitorKey(req, env))];
+  const [all, mine] = await db.bumpAsk(env.DB, day, buckets);
+  if (all > DAILY_LIMIT || mine > PER_IP_LIMIT) {
+    await db.unbumpAsk(env.DB, day, buckets);
+    throw new HttpError(429, all > DAILY_LIMIT ? '오늘은 공방지기가 질문을 많이 받아 쉬는 중이에요. 내일 다시 찾아와 주세요.' : `오늘 질문은 ${PER_IP_LIMIT}번까지예요. 내일 다시 물어봐 주세요.`);
+  }
+  let stream: ReadableStream<Uint8Array>;
+  try {
+    const messages: AskMessage[] = [...input.history, { role: 'user', content: input.question }];
+    const res = await env.AI.run(ASK_MODEL, { messages: [{ role: 'system', content: systemPrompt(await db.shelf(env.DB)) }, ...messages], stream: true, max_tokens: 700,
+      // 생각 과정을 켜면 답보다 생각에 글자를 다 써 버려서 끕니다. 무료 사용량도 덜 씁니다.
+      chat_template_kwargs: { enable_thinking: false },
+    });
+    // stream: true면 SSE 스트림이 옵니다. 타입 정의는 일반 응답과 묶여 있어 여기서 좁힙니다.
+    stream = res as unknown as ReadableStream<Uint8Array>;
+  } catch (e) {
+    // Workers AI 무료 사용량을 다 쓰면 여기로 옵니다. 답하지 못했으니 센 횟수도 돌려놓습니다.
+    console.error(e);
+    await db.unbumpAsk(env.DB, day, buckets);
+    throw new HttpError(503, '공방지기가 지금은 대답하기 어려워요. 잠시 뒤에 다시 물어봐 주세요.');
+  }
+  return new Response(stream.pipeThrough(sseToText()), {
+    headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', 'X-Ask-Left': String(Math.max(PER_IP_LIMIT - mine, 0)) },
+  });
+}
 
 function notFound(message = '그 번호의 게임이 없습니다.'): never {
   throw new HttpError(404, message);

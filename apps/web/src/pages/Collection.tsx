@@ -8,9 +8,23 @@ import { useLoad } from "../useLoad";
 const EMPTY = { q: "", players: "all", category: "all", sort: "no", order: "asc" };
 const shelfNo = (no: number) => "HM-" + String(no).padStart(3, "0");
 
+// 카드/표 보기는 방문자 브라우저에만 기억합니다. 저장소를 못 쓰면 카드로 시작합니다.
+type View = "card" | "table";
+const VIEW_KEY = "munse-collection-view";
+const savedView = (): View => {
+    try {
+        return localStorage.getItem(VIEW_KEY) === "table" ? "table" : "card";
+    } catch {
+        return "card";
+    }
+};
+
+const bestText = (g: Game) => (g.bestPlayers ? (g.bestPlayers.min === g.bestPlayers.max ? `${g.bestPlayers.min}` : `${g.bestPlayers.min}–${g.bestPlayers.max}`) : null);
+const ratingText = (g: Game) => (g.rating ? g.rating.toFixed(1) : "-");
+
 /** best를 켜면 인원 아래에 베스트 인원을 작게 붙입니다 (상세 창에서만). */
 function Stats({ g, best = false }: { g: Game; best?: boolean }) {
-    const star = best && g.bestPlayers ? (g.bestPlayers.min === g.bestPlayers.max ? `${g.bestPlayers.min}` : `${g.bestPlayers.min}–${g.bestPlayers.max}`) : null;
+    const star = best ? bestText(g) : null;
     return (
         <span className="stats">
             <span>
@@ -34,7 +48,7 @@ function Stats({ g, best = false }: { g: Game; best?: boolean }) {
             </span>
             <span>
                 <span className="dim">평점</span>
-                <span className="v">{g.rating.toFixed(1)}</span>
+                <span className="v">{ratingText(g)}</span>
             </span>
         </span>
     );
@@ -44,6 +58,15 @@ export function Collection() {
     const [f, setF] = useState(EMPTY);
     const [q, setQ] = useState("");
     const [sel, setSel] = useState<Game | null>(null);
+    const [view, setView] = useState<View>(savedView);
+    const pickView = (v: View) => {
+        setView(v);
+        try {
+            localStorage.setItem(VIEW_KEY, v);
+        } catch {
+            // 저장하지 못해도 이번 화면에서는 바뀝니다.
+        }
+    };
     // 글자를 칠 때마다 요청하지 않도록 검색어만 조금 늦춰 반영합니다.
     useEffect(() => {
         const t = window.setTimeout(() => setF((x) => (x.q === q ? x : { ...x, q })), 250);
@@ -130,16 +153,27 @@ export function Collection() {
                     <div className="end">
                         <button
                             type="button"
-                            className="btn"
+                            className="btn icon-btn"
+                            aria-label="조건 초기화"
+                            title="조건 초기화"
                             onClick={() => {
                                 setQ("");
                                 setF(EMPTY);
                             }}
                         >
-                            초기화
+                            ↺
                         </button>
                     </div>
                 </form>
+
+                <div className="view-bar" role="group" aria-label="보기 방식">
+                    <button type="button" className={"btn icon-btn" + (view === "card" ? " on" : "")} aria-pressed={view === "card"} aria-label="카드로 보기" title="카드로 보기" onClick={() => pickView("card")}>
+                        ▦
+                    </button>
+                    <button type="button" className={"btn icon-btn" + (view === "table" ? " on" : "")} aria-pressed={view === "table"} aria-label="표로 보기" title="표로 보기" onClick={() => pickView("table")}>
+                        ☰
+                    </button>
+                </div>
 
                 <LoadState loading={loading && !data} error={error} onRetry={reload} />
                 {data && !error && items.length === 0 && (
@@ -150,32 +184,89 @@ export function Collection() {
                     </div>
                 )}
 
-                <div className="grid">
-                    {items.map((g) => (
-                        <button key={g.id} type="button" className="gcard card" onClick={() => setSel(g)}>
-                            <span className="niche">
-                                <span className="dim no">{shelfNo(g.no)}</span>
-                                <Cover imageUrl={g.imageUrl} />
-                            </span>
-                            <span className="body">
-                                <span className="name">{g.nameKo}</span>
-                                <span className="sub">
-                                    <span className="dim en">{g.nameEn}</span>
-                                    <span className="tags">
-                                        {g.category && (
-                                            <span className="cat" style={{ borderColor: categoryColor(g.category) }}>
-                                                {g.category}
+                {view === "table" && items.length > 0 && (
+                    <div className="sheet ctable-wrap">
+                        <table className="ctable">
+                            <thead>
+                                <tr>
+                                    <th>번호</th>
+                                    <th>게임</th>
+                                    <th>카테고리</th>
+                                    <th>인원</th>
+                                    <th className="r">시간</th>
+                                    <th className="r">웨이트</th>
+                                    <th className="r">평점</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {items.map((g) => (
+                                    <tr key={g.id} onClick={() => setSel(g)}>
+                                        <td className="dim">{shelfNo(g.no)}</td>
+                                        <td>
+                                            <span className="ct-name">
+                                                <span className="ct-thumb niche">
+                                                    <Cover imageUrl={g.imageUrl} />
+                                                </span>
+                                                <span className="ct-txt">
+                                                    <button type="button" className="ct-link" onClick={(e) => (e.stopPropagation(), setSel(g))}>
+                                                        {g.nameKo}
+                                                    </button>
+                                                    {g.nameEn && g.nameEn !== g.nameKo && <span className="dim ct-en">{g.nameEn}</span>}
+                                                </span>
+                                                {g.expansions.length > 0 && <span className="cat">확장 {g.expansions.length}</span>}
+                                                {g.onLoan && <span className="cat loan">대여 중</span>}
                                             </span>
-                                        )}
-                                        {g.expansions.length > 0 && <span className="cat">확장 {g.expansions.length}</span>}
-                                        {g.onLoan && <span className="cat loan">대여 중</span>}
-                                    </span>
+                                        </td>
+                                        <td>
+                                            {g.category ? (
+                                                <span className="cat" style={{ borderColor: categoryColor(g.category) }}>
+                                                    {g.category}
+                                                </span>
+                                            ) : (
+                                                "-"
+                                            )}
+                                        </td>
+                                        <td>
+                                            {playersText(g)}
+                                            {bestText(g) && <span className="dim ct-best"> (베스트 {bestText(g)}인)</span>}
+                                        </td>
+                                        <td className="r">{timeText(g)}</td>
+                                        <td className="r">{weightText(g)}</td>
+                                        <td className="r">{ratingText(g)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+
+                {view === "card" && (
+                    <div className="grid">
+                        {items.map((g) => (
+                            <button key={g.id} type="button" className="gcard card" onClick={() => setSel(g)}>
+                                <span className="niche">
+                                    <Cover imageUrl={g.imageUrl} />
                                 </span>
-                                <Stats g={g} />
-                            </span>
-                        </button>
-                    ))}
-                </div>
+                                <span className="body">
+                                    <span className="name">{g.nameKo}</span>
+                                    <span className="sub">
+                                        <span className="dim en">{g.nameEn}</span>
+                                        <span className="tags">
+                                            {g.category && (
+                                                <span className="cat" style={{ borderColor: categoryColor(g.category) }}>
+                                                    {g.category}
+                                                </span>
+                                            )}
+                                            {g.expansions.length > 0 && <span className="cat">확장 {g.expansions.length}</span>}
+                                            {g.onLoan && <span className="cat loan">대여 중</span>}
+                                        </span>
+                                    </span>
+                                    <Stats g={g} />
+                                </span>
+                            </button>
+                        ))}
+                    </div>
+                )}
             </main>
 
             {sel && (

@@ -2,12 +2,12 @@ import { ReactNode } from 'react';
 import { Link } from '../router';
 import { sceneUrl, useTimeOfDay } from '../timeOfDay';
 
-type Page = 'home' | 'collection' | 'reviews' | 'wishlist' | 'mysteries' | 'admin';
+type Page = 'home' | 'collection' | 'reviews' | 'wishlist' | 'mysteries' | 'admin' | 'ask';
 
 export function Layout({ page, count, children, footNote, footer = true }: { page: Page; count?: number; children: ReactNode; footNote?: string; footer?: boolean }) {
   const cur = (p: Page) => (page === p ? { className: 'nv on', 'aria-current': 'page' as const } : { className: 'nv' });
   // 게임 후기(/reviews)는 당분간 메뉴에서 뺐습니다. 주소로 들어가면 그대로 열립니다.
-  const inMore = page === 'wishlist' || page === 'mysteries' || page === 'reviews';
+  const inMore = page === 'wishlist' || page === 'reviews' || page === 'ask';
   const dot = (p: Page) => (page === p ? <span className="nv-dot" aria-hidden="true">◆</span> : null);
   return (
     <div className="app g14">
@@ -21,11 +21,13 @@ export function Layout({ page, count, children, footNote, footer = true }: { pag
           <Link to="/collection" {...cur('collection')}>
             {dot('collection')}컬렉션{count !== undefined && <span className="g11 count">{count}</span>}
           </Link>
+          <Link to="/mysteries" {...cur('mysteries')}>{dot('mysteries')}머더미스터리<span className="nv-long"> 후기</span></Link>
           <details className="more">
             <summary className={inMore ? 'nv on' : 'nv'}>{inMore && <span className="nv-dot" aria-hidden="true">◆</span>}기타 ▾</summary>
             <div className="more-menu">
-              <Link to="/mysteries" {...cur('mysteries')}>머더미스터리 후기</Link>
               <Link to="/wishlist" {...cur('wishlist')}>위시리스트</Link>
+              <Link to="/ask" {...cur('ask')}>공방지기와 대화</Link>
+              <a href="https://bg-mpti-test.vercel.app/" target="_blank" rel="noreferrer" className="nv">미플 유형 테스트 ↗</a>
             </div>
           </details>
         </nav>

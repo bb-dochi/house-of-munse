@@ -400,6 +400,10 @@ export function Home() {
             우리의 컬렉션{total !== undefined && <span className="g11 count">{total}</span>}
             <span aria-hidden="true">→</span>
           </Link>
+          <Link to="/ask" className="col-link">
+            공방지기에게 질문하기
+            <span aria-hidden="true">→</span>
+          </Link>
         </div>
 
         <div className="ov-cta" style={L.phone ? { bottom: 16 } : { bottom: Math.round(24 * L.u), transform: `translateX(-50%) scale(${L.u.toFixed(3)})` }}>

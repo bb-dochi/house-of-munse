@@ -1,6 +1,6 @@
 import { AnchorHTMLAttributes, MouseEvent, useEffect, useState } from 'react';
 
-// 화면이 다섯 개뿐이라 라우터 라이브러리 없이 주소만 직접 다룹니다.
+// 화면이 몇 개뿐이라 라우터 라이브러리 없이 주소만 직접 다룹니다.
 
 export function navigate(to: string) {
   window.history.pushState(null, '', to);

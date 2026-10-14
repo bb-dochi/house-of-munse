@@ -1,5 +1,6 @@
 // D1 읽기·쓰기. ORM 없이 SQL을 직접 씁니다 (house-of-munse2와 같은 방식).
 import { Buffer } from 'node:buffer';
+import type { QuestionRow } from './questions';
 import type { BackupRow, ColumnInfo } from './backup';
 import { Columns, GameRow, LedgerGame, PublicGame, toLedger, toPublic } from './rows';
 
@@ -309,4 +310,59 @@ export async function importGames(db: D1Database, rows: BackupRow[]): Promise<{ 
   await db.batch(stmts);
   const inserted = rows.filter((r) => !existing.has(String(r.id))).length;
   return { inserted, updated: rows.length - inserted };
+}
+
+/** 그날 bucket의 질문 수를 하나 올리고 올린 뒤의 값을 돌려줍니다. 지난 날짜 기록은 함께 지웁니다. */
+export async function bumpAsk(db: D1Database, day: string, buckets: string[]): Promise<number[]> {
+  const bump = db.prepare('INSERT INTO ask_usage (day, bucket, count) VALUES (?1, ?2, 1) ON CONFLICT(day, bucket) DO UPDATE SET count = count + 1 RETURNING count');
+  const results = await db.batch<{ count: number }>([
+    db.prepare('DELETE FROM ask_usage WHERE day < ?1').bind(day),
+    ...buckets.map((b) => bump.bind(day, b)),
+  ]);
+  return results.slice(1).map((r) => r.results[0]?.count ?? 0);
+}
+
+/** 한도를 넘겨 답하지 못한 질문은 다시 돌려놓습니다. */
+export async function unbumpAsk(db: D1Database, day: string, buckets: string[]): Promise<void> {
+  const dec = db.prepare('UPDATE ask_usage SET count = MAX(count - 1, 0) WHERE day = ?1 AND bucket = ?2');
+  await db.batch(buckets.map((b) => dec.bind(day, b)));
+}
+
+export async function insertQuestion(db: D1Database, q: { token: string; name: string; body: string; allowPublic: boolean }): Promise<void> {
+  await db
+    .prepare('INSERT INTO questions (token, name, body, allow_public, created_at) VALUES (?1, ?2, ?3, ?4, ?5)')
+    .bind(q.token, q.name, q.body, q.allowPublic ? 1 : 0, new Date().toISOString())
+    .run();
+}
+
+export async function questionByToken(db: D1Database, token: string): Promise<QuestionRow | null> {
+  return db.prepare("SELECT * FROM questions WHERE token = ? AND status != 'hidden'").bind(token).first<QuestionRow>();
+}
+
+export async function questionById(db: D1Database, id: number): Promise<QuestionRow | null> {
+  return db.prepare('SELECT * FROM questions WHERE id = ?').bind(id).first<QuestionRow>();
+}
+
+export async function publicQuestions(db: D1Database): Promise<QuestionRow[]> {
+  const { results } = await db.prepare("SELECT * FROM questions WHERE published = 1 AND status = 'answered' ORDER BY answered_at DESC LIMIT 30").all<QuestionRow>();
+  return results;
+}
+
+export async function allQuestions(db: D1Database): Promise<QuestionRow[]> {
+  const { results } = await db.prepare("SELECT * FROM questions ORDER BY status = 'new' DESC, id DESC").all<QuestionRow>();
+  return results;
+}
+
+/** 바꿀 칸만 고칩니다. 처음 답변 완료가 되면 답한 시각을 남깁니다. */
+export async function updateQuestion(db: D1Database, id: number, set: Record<string, string | number>): Promise<void> {
+  const cols = { ...set } as Record<string, string | number>;
+  if (cols.status === 'answered') cols.answered_at = new Date().toISOString();
+  const keys = Object.keys(cols);
+  if (!keys.length) return;
+  await db.prepare(`UPDATE questions SET ${keys.map((k, i) => `${k} = ?${i + 1}`).join(', ')} WHERE id = ?${keys.length + 1}`).bind(...keys.map((k) => cols[k]), id).run();
+}
+
+export async function deleteQuestion(db: D1Database, id: number): Promise<boolean> {
+  const { meta } = await db.prepare('DELETE FROM questions WHERE id = ?').bind(id).run();
+  return meta.changes > 0;
 }
