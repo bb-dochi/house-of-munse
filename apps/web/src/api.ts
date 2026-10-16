@@ -107,6 +107,9 @@ export interface BggHit {
   year: number | null;
 }
 
+export type { InstaPlan, InstaTask, TaskKind } from '../worker/insta';
+import type { InstaPlan } from '../worker/insta';
+
 export class ApiError extends Error {
   constructor(message: string, readonly status: number) {
     super(message);
@@ -217,6 +220,7 @@ export const api = {
   wishlist: () => call<Wish[]>('/wishlist'),
   login: (password: string) => call<{ token: string }>('/auth/login', { method: 'POST', body: JSON.stringify({ password }) }),
   ledger: () => call<LedgerRow[]>('/admin/ledger', {}, true),
+  instaPlan: () => call<InstaPlan>('/admin/insta', {}, true),
   createGame: (data: Record<string, unknown>) => call<LedgerRow>('/admin/games', { method: 'POST', body: JSON.stringify(data) }, true),
   updateGame: (id: string, data: Record<string, unknown>) => call<LedgerRow>(`/admin/games/${id}`, { method: 'PATCH', body: JSON.stringify(data) }, true),
   deleteGame: (id: string) => call<{ ok: true }>(`/admin/games/${id}`, { method: 'DELETE' }, true),

@@ -370,6 +370,7 @@ select.cell{background:var(--panel)}
 @media (max-width:639px){
   .hd{padding:10px 16px}
   .hd .adm:not(.on){display:none}
+  .hd .adm-more .more-menu{left:0;right:auto}
   .hd .nv{padding:0 8px;font-size:12px;min-height:36px}
   .pad,.ft{padding-left:16px;padding-right:16px}
   .h1{font-size:30px}

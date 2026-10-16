@@ -4,6 +4,7 @@ import { Format, normalizeRows, readBackup, toCsv } from './backup';
 import { fetchBggGame, searchBgg } from './bgg';
 import * as db from './db';
 import { HttpError, json, readJson } from './http';
+import { INSTA_PLAN } from './insta';
 import { toMysteryColumns, toPlayColumns, toWishColumns } from './entries';
 import { LedgerInput, toPatch } from './ledger';
 import { filterGames, Mood, MOODS, recommend, TimePref, TIME_PREFS } from './logic';
@@ -66,6 +67,7 @@ const ROUTES: [string, string, boolean, Handler][] = [
     return { token: issueToken(env.TOKEN_SECRET) };
   }],
   ['GET', '/api/admin/ledger', true, ({ env }) => db.ledger(env.DB)],
+  ['GET', '/api/admin/insta', true, () => INSTA_PLAN],
   ['GET', '/api/admin/questions', true, async ({ env }) => (await db.allQuestions(env.DB)).map(toAdmin)],
   ['PATCH', '/api/admin/questions/:id', true, async ({ req, env, id }) => {
     const n = entryId(id);

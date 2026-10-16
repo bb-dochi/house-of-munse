@@ -1,20 +1,22 @@
 import { ReactNode } from 'react';
+import { auth } from '../api';
 import { Link } from '../router';
 import { sceneUrl, useTimeOfDay } from '../timeOfDay';
 
-type Page = 'home' | 'collection' | 'reviews' | 'wishlist' | 'mysteries' | 'admin' | 'ask';
+type Page = 'home' | 'collection' | 'reviews' | 'wishlist' | 'mysteries' | 'admin' | 'ask' | 'insta';
 
 export function Layout({ page, count, children, footNote, footer = true }: { page: Page; count?: number; children: ReactNode; footNote?: string; footer?: boolean }) {
   const cur = (p: Page) => (page === p ? { className: 'nv on', 'aria-current': 'page' as const } : { className: 'nv' });
   // 게임 후기(/reviews)는 당분간 메뉴에서 뺐습니다. 주소로 들어가면 그대로 열립니다.
   const inMore = page === 'wishlist' || page === 'reviews' || page === 'ask';
+  const inAdmin = page === 'admin' || page === 'insta';
   const dot = (p: Page) => (page === p ? <span className="nv-dot" aria-hidden="true">◆</span> : null);
   return (
     <div className="app g14">
       <header className="hd">
         <Link to="/" className="brand">
           <span className="g11 brand-name">HOUSE OF MUNSE</span>
-          {page === 'admin' && <span className="g11 brand-admin">ADMIN</span>}
+          {(page === 'admin' || page === 'insta') && <span className="g11 brand-admin">ADMIN</span>}
         </Link>
         <nav aria-label="주 메뉴" className="hd-nav">
           <Link to="/" {...cur('home')}>{dot('home')}공방</Link>
@@ -31,7 +33,14 @@ export function Layout({ page, count, children, footNote, footer = true }: { pag
             </div>
           </details>
         </nav>
-        <Link to="/admin" className={page === 'admin' ? 'nv on adm' : 'nv adm'}>{dot('admin')}컬렉션 관리</Link>
+        <details className="more adm-more">
+          <summary className={inAdmin ? 'nv on' : 'nv'}>{inAdmin && <span className="nv-dot" aria-hidden="true">◆</span>}관리자 ▾</summary>
+          <div className="more-menu">
+            <Link to="/admin" {...cur('admin')}>컬렉션 관리</Link>
+            {/* 인스타 운영은 관리자로 로그인한 탭에서만 보입니다. 내용도 관리자 API로만 받습니다. */}
+            {auth.get() && <Link to="/insta" {...cur('insta')}>인스타 운영</Link>}
+          </div>
+        </details>
       </header>
       {children}
       {footer && (

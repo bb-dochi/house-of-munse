@@ -6,6 +6,7 @@ import { Wishlist } from './pages/Wishlist';
 import { Mysteries } from './pages/Mysteries';
 import { Admin } from './pages/Admin';
 import { Ask } from './pages/Ask';
+import { Insta } from './pages/Insta';
 import { BgmButton } from './components/BgmButton';
 
 export function App() {
@@ -25,5 +26,6 @@ function Page() {
   if (path === '/mysteries') return <Mysteries />;
   if (path === '/admin') return <Admin />;
   if (path === '/ask') return <Ask />;
+  if (path === '/insta') return <Insta />;
   return <Home />;
 }
