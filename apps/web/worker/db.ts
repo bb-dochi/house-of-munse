@@ -1,5 +1,7 @@
 // D1 읽기·쓰기. ORM 없이 SQL을 직접 씁니다 (house-of-munse2와 같은 방식).
 import { Buffer } from 'node:buffer';
+import type { CommentRow } from './comments';
+import { toComment } from './comments';
 import type { QuestionRow } from './questions';
 import type { BackupRow, ColumnInfo } from './backup';
 import { Columns, GameRow, LedgerGame, PublicGame, toLedger, toPublic } from './rows';
@@ -225,14 +227,69 @@ const toMystery = (m: MysteryRow) => ({
   spoiler: m.spoiler,
 });
 
+type PhotoRef = { id: number; mystery_id: number; created_at: string };
+
+/** 후기마다 사진 주소와 댓글을 붙입니다. 사진은 본문(data) 없이 주소만 내려 보냅니다. */
+function withExtras(rows: MysteryRow[], photos: PhotoRef[], comments: CommentRow[]) {
+  return rows.map((m) => ({
+    ...toMystery(m),
+    photos: photos.filter((p) => p.mystery_id === m.id).map((p) => ({ id: p.id, url: `/api/mystery-photos/${p.id}` })),
+    comments: comments.filter((c) => c.mystery_id === m.id).map(toComment),
+  }));
+}
+
 export async function mysteries(db: D1Database) {
-  const { results } = await db.prepare('SELECT * FROM mysteries ORDER BY played_at DESC, id DESC').all<MysteryRow>();
-  return results.map(toMystery);
+  const [rows, photos, comments] = await db.batch<unknown>([
+    db.prepare('SELECT * FROM mysteries ORDER BY played_at DESC, id DESC'),
+    db.prepare('SELECT id, mystery_id, created_at FROM mystery_photos ORDER BY id'),
+    db.prepare('SELECT * FROM mystery_comments ORDER BY id'),
+  ]);
+  return withExtras(rows.results as MysteryRow[], photos.results as PhotoRef[], comments.results as CommentRow[]);
 }
 
 export async function mystery(db: D1Database, id: number) {
-  const row = await db.prepare('SELECT * FROM mysteries WHERE id = ?').bind(id).first<MysteryRow>();
-  return row ? toMystery(row) : null;
+  const [rows, photos, comments] = await db.batch<unknown>([
+    db.prepare('SELECT * FROM mysteries WHERE id = ?').bind(id),
+    db.prepare('SELECT id, mystery_id, created_at FROM mystery_photos WHERE mystery_id = ? ORDER BY id').bind(id),
+    db.prepare('SELECT * FROM mystery_comments WHERE mystery_id = ? ORDER BY id').bind(id),
+  ]);
+  return withExtras(rows.results as MysteryRow[], photos.results as PhotoRef[], comments.results as CommentRow[])[0] ?? null;
+}
+
+// ---------- 머더미스터리 사진·댓글 ----------
+
+export async function mysteryPhoto(db: D1Database, id: number): Promise<{ mime: string; data: Uint8Array } | null> {
+  const row = await db.prepare('SELECT mime, data FROM mystery_photos WHERE id = ?').bind(id).first<{ mime: string; data: string }>();
+  return row ? { mime: row.mime, data: Uint8Array.from(atob(row.data), (c) => c.charCodeAt(0)) } : null;
+}
+
+export async function countMysteryPhotos(db: D1Database, mysteryId: number): Promise<number> {
+  return (await db.prepare('SELECT COUNT(*) AS n FROM mystery_photos WHERE mystery_id = ?').bind(mysteryId).first<{ n: number }>())?.n ?? 0;
+}
+
+/** 표지(saveCover)와 같은 이유로 base64 글자로 저장합니다. */
+export async function insertMysteryPhoto(db: D1Database, mysteryId: number, mime: string, data: ArrayBuffer): Promise<void> {
+  await db
+    .prepare('INSERT INTO mystery_photos (mystery_id, mime, data, created_at) VALUES (?, ?, ?, ?)')
+    .bind(mysteryId, mime, Buffer.from(data).toString('base64'), new Date().toISOString())
+    .run();
+}
+
+export async function deleteMysteryPhoto(db: D1Database, id: number): Promise<boolean> {
+  const { meta } = await db.prepare('DELETE FROM mystery_photos WHERE id = ?').bind(id).run();
+  return meta.changes > 0;
+}
+
+export async function insertMysteryComment(db: D1Database, mysteryId: number, c: { name: string; body: string; spoiler: boolean }): Promise<void> {
+  await db
+    .prepare('INSERT INTO mystery_comments (mystery_id, name, body, spoiler, created_at) VALUES (?, ?, ?, ?, ?)')
+    .bind(mysteryId, c.name, c.body, c.spoiler ? 1 : 0, new Date().toISOString())
+    .run();
+}
+
+export async function deleteMysteryComment(db: D1Database, id: number): Promise<boolean> {
+  const { meta } = await db.prepare('DELETE FROM mystery_comments WHERE id = ?').bind(id).run();
+  return meta.changes > 0;
 }
 
 // ---------- 후기·위시 쓰기. 열 이름은 entries.ts가 정한 것만 들어옵니다. ----------

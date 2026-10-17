@@ -2,6 +2,7 @@
 import { ASK_MODEL, AskMessage, DAILY_LIMIT, kstDay, PER_IP_LIMIT, readAsk, sseToText, systemPrompt } from './ask';
 import { Format, normalizeRows, readBackup, toCsv } from './backup';
 import { fetchBggGame, searchBgg } from './bgg';
+import { COMMENTS_PER_IP, MAX_PHOTOS, readComment } from './comments';
 import * as db from './db';
 import { HttpError, json, readJson } from './http';
 import { INSTA_PLAN } from './insta';
@@ -53,6 +54,12 @@ const ROUTES: [string, string, boolean, Handler][] = [
   ['GET', '/api/plays', false, ({ env }) => db.plays(env.DB)],
   ['GET', '/api/wishlist', false, ({ env }) => db.wishes(env.DB)],
   ['GET', '/api/mysteries', false, ({ env }) => db.mysteries(env.DB)],
+  ['GET', '/api/mystery-photos/:id', false, async ({ env, id }) => {
+    const photo = (await db.mysteryPhoto(env.DB, entryId(id))) ?? notFound('사진이 없습니다.');
+    // 사진은 고치지 않고 지웠다 새로 올리므로 번호가 같으면 내용도 같습니다.
+    return new Response(photo.data, { headers: { 'Content-Type': photo.mime, 'Cache-Control': 'public, max-age=31536000, immutable' } });
+  }],
+  ['POST', '/api/mysteries/:id/comments', false, ({ req, env, id }) => leaveComment(req, env, entryId(id))],
   ['POST', '/api/ask', false, ({ req, env }) => ask(req, env)],
   ['POST', '/api/questions', false, ({ req, env, url }) => leaveQuestion(req, env, url)],
   ['GET', '/api/questions/:id', false, async ({ env, id }) => {
@@ -92,11 +99,7 @@ const ROUTES: [string, string, boolean, Handler][] = [
     return db.ledgerGame(env.DB, id);
   }],
   ['PUT', '/api/admin/games/:id/cover', true, async ({ req, env, id }) => {
-    const mime = (req.headers.get('Content-Type') ?? '').split(';')[0].trim();
-    if (!COVER_TYPES.includes(mime)) throw new HttpError(400, '표지는 JPEG, PNG, WebP 이미지만 올릴 수 있습니다.');
-    const data = await req.arrayBuffer();
-    if (data.byteLength === 0) throw new HttpError(400, '이미지 파일이 비어 있습니다.');
-    if (data.byteLength > COVER_MAX_BYTES) throw new HttpError(413, '이미지가 너무 큽니다 (1MB 이하).');
+    const { mime, data } = await readImage(req, '표지는');
     if (!(await db.ledgerGame(env.DB, id))) notFound();
     await db.saveCover(env.DB, id, mime, data);
     await db.updateGame(env.DB, id, { cover_image: `/api/covers/${encodeURIComponent(id)}?v=${Date.now()}` });
@@ -141,6 +144,16 @@ const ROUTES: [string, string, boolean, Handler][] = [
     return db.mystery(env.DB, entryId(id));
   }],
   ['DELETE', '/api/admin/mysteries/:id', true, async ({ env, id }) => ((await db.deleteEntry(env.DB, 'mysteries', entryId(id))) ? { ok: true } : noEntry())],
+  ['POST', '/api/admin/mysteries/:id/photos', true, async ({ req, env, id }) => {
+    const n = entryId(id);
+    const { mime, data } = await readImage(req, '사진은');
+    if (!(await db.mystery(env.DB, n))) noEntry();
+    if ((await db.countMysteryPhotos(env.DB, n)) >= MAX_PHOTOS) throw new HttpError(400, `사진은 후기 하나에 ${MAX_PHOTOS}장까지 올릴 수 있어요.`);
+    await db.insertMysteryPhoto(env.DB, n, mime, data);
+    return json(await db.mystery(env.DB, n), 201);
+  }],
+  ['DELETE', '/api/admin/mystery-photos/:id', true, async ({ env, id }) => ((await db.deleteMysteryPhoto(env.DB, entryId(id))) ? { ok: true } : noEntry())],
+  ['DELETE', '/api/admin/mystery-comments/:id', true, async ({ env, id }) => ((await db.deleteMysteryComment(env.DB, entryId(id))) ? { ok: true } : noEntry())],
   ['GET', '/api/admin/export', true, async ({ env, url }) => {
     const format = url.searchParams.get('format') === 'json' ? 'json' : 'csv';
     const [rows, columns] = await Promise.all([db.allGames(env.DB), db.gameColumns(env.DB)]);
@@ -189,6 +202,16 @@ const COVER_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 // 화면에서 긴 변 600px JPEG로 줄여 올리므로 보통 100KB 안쪽입니다. D1 한 행 한도(2MB)보다 넉넉히 작게 둡니다.
 const COVER_MAX_BYTES = 1024 * 1024;
 
+/** 표지·후기 사진 업로드 본문. 종류와 크기만 보고, 줄이는 일은 화면에서 합니다. */
+async function readImage(req: Request, subject: string): Promise<{ mime: string; data: ArrayBuffer }> {
+  const mime = (req.headers.get('Content-Type') ?? '').split(';')[0].trim();
+  if (!COVER_TYPES.includes(mime)) throw new HttpError(400, `${subject} JPEG, PNG, WebP 이미지만 올릴 수 있습니다.`);
+  const data = await req.arrayBuffer();
+  if (data.byteLength === 0) throw new HttpError(400, '이미지 파일이 비어 있습니다.');
+  if (data.byteLength > COVER_MAX_BYTES) throw new HttpError(413, '이미지가 너무 큽니다 (1MB 이하).');
+  return { mime, data };
+}
+
 /** 방문자 IP를 비밀값과 섞은 해시 앞부분. IP 원문은 저장하지 않습니다. */
 async function visitorKey(req: Request, env: Env): Promise<string> {
   const ip = req.headers.get('CF-Connecting-IP') ?? 'local';
@@ -220,6 +243,23 @@ async function leaveQuestion(req: Request, env: Env, url: URL) {
     }
   }
   return { token };
+}
+
+/** 머더미스터리 후기 댓글. 로그인 없이 남기므로 숨은 칸(봇)과 방문자별 하루 상한으로 막습니다. */
+async function leaveComment(req: Request, env: Env, mysteryId: number) {
+  const c = valid(readComment(await readJson(req)));
+  // 봇은 저장하지 않지만 성공한 것처럼 답해 다시 시도하지 않게 합니다.
+  if (c.bot) return json({ ok: true }, 201);
+  if (!(await db.mystery(env.DB, mysteryId))) noEntry();
+  const day = kstDay();
+  const bucket = ['c:' + (await visitorKey(req, env))];
+  const [mine] = await db.bumpAsk(env.DB, day, bucket);
+  if (mine > COMMENTS_PER_IP) {
+    await db.unbumpAsk(env.DB, day, bucket);
+    throw new HttpError(429, `댓글은 하루 ${COMMENTS_PER_IP}개까지 남길 수 있어요. 내일 다시 남겨 주세요.`);
+  }
+  await db.insertMysteryComment(env.DB, mysteryId, c);
+  return json({ ok: true }, 201);
 }
 
 /** 공방지기 질문. 하루 상한과 방문자별 상한을 먼저 세고, 답은 글자가 나오는 대로 흘려 보냅니다. */

@@ -201,8 +201,8 @@ export function Collection() {
                             <tbody>
                                 {items.map((g) => (
                                     <tr key={g.id} onClick={() => setSel(g)}>
-                                        <td className="dim">{shelfNo(g.no)}</td>
-                                        <td>
+                                        <td className="dim ct-no">{shelfNo(g.no)}</td>
+                                        <td className="ct-game">
                                             <span className="ct-name">
                                                 <span className="ct-thumb niche">
                                                     <Cover imageUrl={g.imageUrl} />
@@ -217,7 +217,7 @@ export function Collection() {
                                                 {g.onLoan && <span className="cat loan">대여 중</span>}
                                             </span>
                                         </td>
-                                        <td>
+                                        <td className="ct-cat">
                                             {g.category ? (
                                                 <span className="cat" style={{ borderColor: categoryColor(g.category) }}>
                                                     {g.category}
@@ -226,13 +226,13 @@ export function Collection() {
                                                 "-"
                                             )}
                                         </td>
-                                        <td>
+                                        <td className="ct-players">
                                             {playersText(g)}
                                             {bestText(g) && <span className="dim ct-best"> (베스트 {bestText(g)}인)</span>}
                                         </td>
-                                        <td className="r">{timeText(g)}</td>
-                                        <td className="r">{weightText(g)}</td>
-                                        <td className="r">{ratingText(g)}</td>
+                                        <td className="r ct-time">{timeText(g)}</td>
+                                        <td className="r ct-weight">{weightText(g)}</td>
+                                        <td className="r ct-rating">{ratingText(g)}</td>
                                     </tr>
                                 ))}
                             </tbody>

@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { CSSProperties, useState } from 'react';
 import { api, Mystery } from '../api';
 import { EntryForm, FieldDef, isAdmin } from '../components/EntryForm';
+import { MysteryComments } from '../components/MysteryComments';
+import { MysteryPhotos } from '../components/MysteryPhotos';
 import { Band, Layout, LoadState } from '../components/Layout';
 import { useLoad } from '../useLoad';
 
@@ -36,8 +38,10 @@ export function Mysteries() {
   const all = data ?? [];
   const list = rank === 'all' ? all : all.filter((m) => m.rank === rank);
 
+  // 사진·댓글이 바뀌면 고치던 입력 칸은 그대로 두고 목록만 새로 받습니다.
+  const sync = async () => setData(await api.mysteries());
   const refresh = async () => {
-    setData(await api.mysteries());
+    await sync();
     setEditing(null);
   };
   const remove = async (m: Mystery) => {
@@ -59,7 +63,7 @@ export function Mysteries() {
         <div className="rank-tabs" role="tablist" aria-label="추천도로 보기">
           {['all', ...RANKS].map((r) => (
             <button key={r} type="button" role="tab" aria-selected={rank === r} className={'rank-tab' + (rank === r ? ' on' : '')} style={r !== 'all' ? { color: RANK_COLOR[r] } : undefined} onClick={() => setRank(r)}>
-              {r === 'all' ? '전체' : `${r} 랭크`} <span className="dim">{r === 'all' ? all.length : all.filter((m) => m.rank === r).length}</span>
+              {r === 'all' ? '전체' : <>{r}<span className="rank-word"> 랭크</span></>} <span className="rank-n">{r === 'all' ? all.length : all.filter((m) => m.rank === r).length}</span>
             </button>
           ))}
         </div>
@@ -77,30 +81,43 @@ export function Mysteries() {
             return <EntryForm key={m.id} title={`「${m.title}」 고치기`} fields={FIELDS} initial={toValues(m)} onCancel={() => setEditing(null)} onSave={async (v) => { await api.updateMystery(m.id, toInput(v)); await refresh(); }} />;
           }
           const open = shown.has(m.id);
+          const day = m.playedAt.slice(0, 10);
           return (
-            <article key={m.id} className="case card">
-              <div className="case-rank niche" style={{ color: RANK_COLOR[m.rank] }}>
-                <span className="g11 case-letter" aria-label={`추천도 ${m.rank}`}>{m.rank}</span>
-                <span className="dim">{m.playedAt.slice(0, 10).replace(/-/g, '.')}</span>
-              </div>
+            <article key={m.id} className="case card" style={{ '--rank': RANK_COLOR[m.rank] } as CSSProperties}>
               <div className="case-main">
-                <h2 className="name">{m.title}</h2>
-                <div className="case-meta dim">{[m.players, m.playTime, m.gm ? GM.yes : GM.no].filter(Boolean).join(' · ')}</div>
-                {m.review && <p className="memo">{m.review}</p>}
-                {m.spoiler && (
-                  <div className={'spoiler' + (open ? ' open' : '')}>
-                    <button type="button" className="spoiler-btn" aria-expanded={open} onClick={() => toggle(m.id)}>
-                      {open ? '▾ 스포일러 접기' : '▸ 스포일러 보기'}
-                    </button>
-                    {open && <p className="spoiler-text">{m.spoiler}</p>}
+                <header className="case-head">
+                  <span className="g11 rank-badge niche" aria-hidden="true">{m.rank}</span>
+                  <div className="case-head-text">
+                    <span className="case-rank-lab">추천도 {m.rank} 랭크</span>
+                    <h2 className="case-title">{m.title}</h2>
                   </div>
-                )}
-                {admin && (
-                  <div className="entry-tools">
-                    <button type="button" className="btn mini" onClick={() => setEditing(m.id)}>수정</button>
-                    <button type="button" className="btn mini" onClick={() => remove(m)}>삭제</button>
-                  </div>
-                )}
+                </header>
+                <dl className="case-facts">
+                  <div><dt>날짜</dt><dd><time dateTime={day}>{day.replace(/-/g, '.')}</time></dd></div>
+                  {m.players && <div><dt>인원</dt><dd>{m.players}</dd></div>}
+                  {m.playTime && <div><dt>시간</dt><dd>{m.playTime}</dd></div>}
+                  <div><dt>GM</dt><dd>{m.gm ? '있음' : '없음'}</dd></div>
+                </dl>
+                <div className="case-body">
+                  {m.review && <p className="case-review">{m.review}</p>}
+                  <MysteryPhotos mysteryId={m.id} title={m.title} photos={m.photos} admin={admin} onChanged={sync} />
+                  {m.spoiler && (
+                    <div className={'spoiler' + (open ? ' open' : '')}>
+                      <button type="button" className="spoiler-btn" aria-expanded={open} onClick={() => toggle(m.id)}>
+                        <span>{open ? '▾ 스포일러 접기' : '▸ 스포일러 보기'}</span>
+                        {!open && <span className="spoiler-hint">결말·범인 포함</span>}
+                      </button>
+                      {open && <p className="spoiler-text">{m.spoiler}</p>}
+                    </div>
+                  )}
+                  {admin && (
+                    <div className="entry-tools">
+                      <button type="button" className="btn mini" onClick={() => setEditing(m.id)}>수정</button>
+                      <button type="button" className="btn mini" onClick={() => remove(m)}>삭제</button>
+                    </div>
+                  )}
+                </div>
+                <MysteryComments mysteryId={m.id} comments={m.comments} admin={admin} onChanged={sync} />
               </div>
             </article>
           );

@@ -86,6 +86,21 @@ export interface Mystery {
   rank: string;
   review: string;
   spoiler: string;
+  photos: MysteryPhoto[];
+  comments: MysteryComment[];
+}
+
+export interface MysteryPhoto {
+  id: number;
+  url: string;
+}
+
+export interface MysteryComment {
+  id: number;
+  name: string;
+  body: string;
+  spoiler: boolean;
+  createdAt: string;
 }
 
 /** 장부에 넣지 않고 받아 보는 BGG 게임 정보 */
@@ -232,6 +247,13 @@ export const api = {
   createMystery: (data: Record<string, unknown>) => call<Mystery>('/admin/mysteries', { method: 'POST', body: JSON.stringify(data) }, true),
   updateMystery: (id: number, data: Record<string, unknown>) => call<Mystery>(`/admin/mysteries/${id}`, { method: 'PATCH', body: JSON.stringify(data) }, true),
   deleteMystery: (id: number) => call<{ ok: true }>(`/admin/mysteries/${id}`, { method: 'DELETE' }, true),
+  /** 화면에서 줄인 사진을 후기에 붙입니다. 사진이 붙은 후기를 돌려줍니다. */
+  addMysteryPhoto: (id: number, image: Blob) =>
+    call<Mystery>(`/admin/mysteries/${id}/photos`, { method: 'POST', body: image, headers: { 'Content-Type': image.type } }, true),
+  deleteMysteryPhoto: (photoId: number) => call<{ ok: true }>(`/admin/mystery-photos/${photoId}`, { method: 'DELETE' }, true),
+  leaveMysteryComment: (id: number, data: { name: string; body: string; spoiler: boolean; website: string }) =>
+    call<{ ok: true }>(`/mysteries/${id}/comments`, { method: 'POST', body: JSON.stringify(data) }),
+  deleteMysteryComment: (commentId: number) => call<{ ok: true }>(`/admin/mystery-comments/${commentId}`, { method: 'DELETE' }, true),
   createWish: (data: Record<string, unknown>) => call<Wish>('/admin/wishes', { method: 'POST', body: JSON.stringify(data) }, true),
   updateWish: (id: number, data: Record<string, unknown>) => call<Wish>(`/admin/wishes/${id}`, { method: 'PATCH', body: JSON.stringify(data) }, true),
   deleteWish: (id: number) => call<{ ok: true }>(`/admin/wishes/${id}`, { method: 'DELETE' }, true),
