@@ -83,39 +83,40 @@ export function Mysteries() {
           const open = shown.has(m.id);
           const day = m.playedAt.slice(0, 10);
           return (
-            <article key={m.id} className={'case card' + (m.photos.length ? ' has-media' : '')} style={{ '--rank': RANK_COLOR[m.rank] } as CSSProperties}>
+            <article key={m.id} className="case card" style={{ '--rank': RANK_COLOR[m.rank] } as CSSProperties}>
               {/* 추천도는 카드 모서리에 붙인 띠 하나로만 보여 줍니다. */}
               <span className="g11 rank-ribbon" aria-label={`추천도 ${m.rank}`}>{m.rank}</span>
-              {m.photos.length > 0 && <MysteryPhotos mysteryId={m.id} title={m.title} photos={m.photos} admin={admin} onChanged={sync} />}
-              <div className="case-main">
-                <h2 className="case-title">{m.title}</h2>
+              <h2 className="case-title">{m.title}</h2>
+              {/* 오른쪽 칸: 정보가 늘 맨 위, 사진은 그 아래. 사진이 없어도 정보 칸은 같은 자리·같은 크기입니다. */}
+              <aside className="case-side" aria-label="사건 정보">
                 <dl className="case-facts">
                   <div><dt>날짜</dt><dd><time dateTime={day}>{day.replace(/-/g, '.')}</time></dd></div>
-                  {m.players && <div><dt>인원</dt><dd>{m.players}</dd></div>}
-                  {m.playTime && <div><dt>시간</dt><dd>{m.playTime}</dd></div>}
+                  {/* 칸이 비어도 자리를 지켜, 카드마다 정보의 모양과 순서가 같게 합니다. */}
+                  <div><dt>인원</dt><dd>{m.players || '—'}</dd></div>
+                  <div><dt>시간</dt><dd>{m.playTime || '—'}</dd></div>
                   <div><dt>GM</dt><dd>{m.gm ? '있음' : '없음'}</dd></div>
                 </dl>
-                <div className="case-body">
-                  {m.review && <p className="case-review">{m.review}</p>}
-                  {m.photos.length === 0 && <MysteryPhotos mysteryId={m.id} title={m.title} photos={m.photos} admin={admin} onChanged={sync} />}
-                  {m.spoiler && (
-                    <div className={'spoiler' + (open ? ' open' : '')}>
-                      <button type="button" className="spoiler-btn" aria-expanded={open} onClick={() => toggle(m.id)}>
-                        <span>{open ? '▾ 스포일러 접기' : '▸ 스포일러 보기'}</span>
-                        {!open && <span className="spoiler-hint">결말·범인 포함</span>}
-                      </button>
-                      {open && <p className="spoiler-text">{m.spoiler}</p>}
-                    </div>
-                  )}
-                  {admin && (
-                    <div className="entry-tools">
-                      <button type="button" className="btn mini" onClick={() => setEditing(m.id)}>수정</button>
-                      <button type="button" className="btn mini" onClick={() => remove(m)}>삭제</button>
-                    </div>
-                  )}
-                </div>
-                <MysteryComments mysteryId={m.id} comments={m.comments} admin={admin} onChanged={sync} />
+                <MysteryPhotos mysteryId={m.id} title={m.title} photos={m.photos} admin={admin} onChanged={sync} />
+              </aside>
+              <div className="case-body">
+                {m.review && <p className="case-review">{m.review}</p>}
+                {m.spoiler && (
+                  <div className={'spoiler' + (open ? ' open' : '')}>
+                    <button type="button" className="spoiler-btn" aria-expanded={open} onClick={() => toggle(m.id)}>
+                      <span>{open ? '▾ 스포일러 접기' : '▸ 스포일러 보기'}</span>
+                      {!open && <span className="spoiler-hint">결말·범인 포함</span>}
+                    </button>
+                    {open && <p className="spoiler-text">{m.spoiler}</p>}
+                  </div>
+                )}
+                {admin && (
+                  <div className="entry-tools">
+                    <button type="button" className="btn mini" onClick={() => setEditing(m.id)}>수정</button>
+                    <button type="button" className="btn mini" onClick={() => remove(m)}>삭제</button>
+                  </div>
+                )}
               </div>
+              <MysteryComments mysteryId={m.id} comments={m.comments} admin={admin} onChanged={sync} />
             </article>
           );
         })}
