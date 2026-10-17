@@ -83,15 +83,12 @@ export function Mysteries() {
           const open = shown.has(m.id);
           const day = m.playedAt.slice(0, 10);
           return (
-            <article key={m.id} className="case card" style={{ '--rank': RANK_COLOR[m.rank] } as CSSProperties}>
+            <article key={m.id} className={'case card' + (m.photos.length ? ' has-media' : '')} style={{ '--rank': RANK_COLOR[m.rank] } as CSSProperties}>
+              {/* 추천도는 카드 모서리에 붙인 띠 하나로만 보여 줍니다. */}
+              <span className="g11 rank-ribbon" aria-label={`추천도 ${m.rank}`}>{m.rank}</span>
+              {m.photos.length > 0 && <MysteryPhotos mysteryId={m.id} title={m.title} photos={m.photos} admin={admin} onChanged={sync} />}
               <div className="case-main">
-                <header className="case-head">
-                  <span className="g11 rank-badge niche" aria-hidden="true">{m.rank}</span>
-                  <div className="case-head-text">
-                    <span className="case-rank-lab">추천도 {m.rank} 랭크</span>
-                    <h2 className="case-title">{m.title}</h2>
-                  </div>
-                </header>
+                <h2 className="case-title">{m.title}</h2>
                 <dl className="case-facts">
                   <div><dt>날짜</dt><dd><time dateTime={day}>{day.replace(/-/g, '.')}</time></dd></div>
                   {m.players && <div><dt>인원</dt><dd>{m.players}</dd></div>}
@@ -100,7 +97,7 @@ export function Mysteries() {
                 </dl>
                 <div className="case-body">
                   {m.review && <p className="case-review">{m.review}</p>}
-                  <MysteryPhotos mysteryId={m.id} title={m.title} photos={m.photos} admin={admin} onChanged={sync} />
+                  {m.photos.length === 0 && <MysteryPhotos mysteryId={m.id} title={m.title} photos={m.photos} admin={admin} onChanged={sync} />}
                   {m.spoiler && (
                     <div className={'spoiler' + (open ? ' open' : '')}>
                       <button type="button" className="spoiler-btn" aria-expanded={open} onClick={() => toggle(m.id)}>

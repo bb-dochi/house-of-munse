@@ -247,14 +247,16 @@ label.btn:focus-within{outline:2px solid var(--gold-line)}
 .rank-tab:hover{border-color:currentColor}
 .rank-tab.on{border-color:currentColor;background:var(--panel-2);box-shadow:inset 0 -3px 0 currentColor}
 .rank-n{font-size:12px;color:var(--text-3)}
-/* 위에 추천도 패와 제목, 오른쪽에 날짜·인원 같은 정보를 세로로 모으고, 댓글은 맨 아래 한 줄을 다 씁니다. */
-.case{border-left:3px solid var(--rank)}
+/* 사진이 있으면 왼쪽에 크게 한 장, 오른쪽에 글. 추천도는 왼쪽 위 모서리에 매단 띠 하나로만 보여 줍니다. */
+.case{position:relative;display:grid;grid-template-columns:minmax(0,1fr)}
+.case.has-media{grid-template-columns:minmax(0,360px) minmax(0,1fr)}
+.rank-ribbon{position:absolute;top:-6px;left:16px;z-index:3;width:46px;padding:12px 0 20px;text-align:center;background:var(--rank);color:#1B1220;font-size:26px;font-weight:700;line-height:1;box-shadow:inset 0 2px 0 rgba(255,255,255,.4),inset 0 -6px 0 rgba(0,0,0,.18);clip-path:polygon(0 0,100% 0,100% 100%,50% calc(100% - 10px),0 100%)}
+/* 띠가 카드 위로 살짝 나온 자리의 접힌 그림자 */
+.rank-ribbon::before{content:'';position:absolute;top:0;left:0;right:0;height:6px;background:rgba(0,0,0,.35)}
 .case-main{min-width:0;padding:22px 26px 0;display:grid;grid-template-columns:minmax(0,1fr) 176px;grid-template-areas:"head facts" "body facts" "cmts cmts";align-content:start;gap:16px 32px}
-.case-head{grid-area:head;display:flex;align-items:center;gap:16px;min-width:0}
-.rank-badge{flex:none;width:60px;height:66px;display:flex;align-items:center;justify-content:center;padding-bottom:4px;border:1px solid var(--line-soft);border-bottom:6px solid var(--wood);font-size:40px;font-weight:700;line-height:1;color:var(--rank);text-shadow:3px 3px 0 rgba(0,0,0,.45)}
-.case-head-text{min-width:0;display:flex;flex-direction:column;gap:6px}
-.case-rank-lab{font-family:'Galmuri11',sans-serif;font-size:12px;letter-spacing:.1em;color:var(--rank)}
-.case-title{font-family:'Galmuri11',sans-serif;font-weight:700;font-size:24px;line-height:1.35;color:var(--text-hi);word-break:keep-all;overflow-wrap:anywhere}
+.case-title{grid-area:head;align-self:center;font-family:'Galmuri11',sans-serif;font-weight:700;font-size:24px;line-height:1.35;color:var(--text-hi);word-break:keep-all;overflow-wrap:anywhere}
+/* 사진이 없는 카드는 제목을 띠 옆으로 비켜 둡니다. */
+.case:not(.has-media) .case-title{min-height:44px;padding-left:58px}
 .case-facts{grid-area:facts;align-self:start;margin:0;padding-left:24px;border-left:1px dashed var(--line);display:flex;flex-direction:column;gap:12px}
 .case-facts>div{display:flex;align-items:baseline;gap:12px;min-width:0}
 .case-facts dt{flex:0 0 3em;font-family:'Galmuri11',sans-serif;font-size:12px;letter-spacing:.06em;color:var(--dim)}
@@ -268,17 +270,22 @@ label.btn:focus-within{outline:2px solid var(--gold-line)}
 .spoiler-btn:hover{background:rgba(240,128,96,.08)}
 .spoiler-hint{font-size:12px;color:var(--dim)}
 .spoiler-text{padding:4px 16px 16px;font-size:15px;line-height:1.85;color:var(--text-2);white-space:pre-line;word-break:keep-all;overflow-wrap:anywhere}
-/* 후기 사진. 칸 비율을 고정해 사진 비율이 제각각이어도 줄이 맞습니다. 한 장이면 크게 보여 줍니다. */
-.case-photos{display:flex;flex-direction:column;align-items:flex-start;gap:10px}
-.photo-grid{width:100%;margin:0;padding:0;list-style:none;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
-.photo-grid.one{grid-template-columns:minmax(0,420px)}
-.photo-grid.two{grid-template-columns:repeat(2,minmax(0,1fr));max-width:520px}
-.photo-grid li{position:relative;min-width:0}
-.photo-thumb{display:block;width:100%;padding:0;border:1px solid var(--line-soft);background:var(--niche);aspect-ratio:4/3;overflow:hidden;cursor:zoom-in}
-.photo-thumb:hover{border-color:var(--gold-line)}
-.photo-thumb img{display:block;width:100%;height:100%;object-fit:cover}
-.photo-del{position:absolute;top:4px;right:4px;width:32px;height:32px;padding:0;border:1px solid var(--line);background:rgba(18,12,22,.85);color:var(--text-hi);font-size:18px;line-height:1}
-.photo-del:hover{border-color:#F08060;color:#F08060}
+/* 후기 사진. 가로 스크롤 스냅이라 손가락으로 밀어 넘기고, 화살표는 같은 자리로 스크롤합니다. 글이 길면 사진이 따라 내려옵니다. */
+.case-media{min-width:0;background:var(--niche);border-right:1px solid var(--line-soft);display:flex;flex-direction:column}
+.media-frame{position:sticky;top:0;aspect-ratio:4/5;background:#0D0810;overflow:hidden}
+.media-track{display:flex;height:100%;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;overscroll-behavior-x:contain;scrollbar-width:none}
+.media-track::-webkit-scrollbar{display:none}
+.media-slide{flex:0 0 100%;height:100%;padding:0;border:0;background:none;scroll-snap-align:start;scroll-snap-stop:always;cursor:zoom-in}
+.media-slide img{display:block;width:100%;height:100%;object-fit:cover;user-select:none;-webkit-user-drag:none}
+.media-nav{position:absolute;top:50%;z-index:2;width:40px;height:48px;margin-top:-24px;padding:0;border:1px solid var(--line);background:rgba(18,12,22,.82);color:var(--text-hi);font-size:16px;line-height:1}
+.media-nav:hover{border-color:var(--gold-line);color:var(--gold-hi)}
+.media-nav.prev{left:8px}
+.media-nav.next{right:8px}
+.media-count{position:absolute;right:8px;bottom:8px;z-index:2;padding:4px 8px;border:1px solid var(--line);background:rgba(18,12,22,.85);font-size:12px;color:var(--text-hi);pointer-events:none}
+.case-media>.err{padding:0 12px 12px}
+.media-tools{display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px}
+.media-empty{display:flex;flex-direction:column;gap:8px}
+.media-empty .media-tools{padding:0}
 .photo-modal .modal-back{background:rgba(8,5,10,.92)}
 .photo-view{position:relative;margin:0;max-width:min(1100px,100%);max-height:100%;display:flex;flex-direction:column;gap:10px}
 .photo-view img{display:block;max-width:100%;max-height:calc(100vh - 100px);max-height:calc(100dvh - 100px);margin:0 auto;object-fit:contain;border:1px solid var(--line);box-shadow:8px 8px 0 rgba(0,0,0,.45)}
@@ -310,28 +317,39 @@ label.btn:focus-within{outline:2px solid var(--gold-line)}
 .cmt-spoil input{margin-top:0;width:18px;height:18px}
 .cmt-form .err,.cmt-done{grid-column:1/-1}
 .cmt-done{font-family:'Galmuri11',sans-serif;font-size:12px;color:var(--gold)}
-/* 폭이 좁아지면 오른쪽 정보 칸을 제목 아래 한 줄로 내립니다. */
+/* 사진 옆 글 칸은 좁으니, 정보 칸을 제목 아래 한 줄로 내립니다. 화면이 좁아도 마찬가지입니다. */
+.case.has-media .case-main{grid-template-columns:minmax(0,1fr);grid-template-areas:"head" "facts" "body" "cmts"}
+.case.has-media .case-facts{padding:12px 0 0;border-left:0;border-top:1px dashed var(--line);flex-direction:row;flex-wrap:wrap;gap:8px 24px}
+.case.has-media .case-facts>div{gap:6px}
+.case.has-media .case-facts dt{flex:none}
+.case.has-media .cmt-form{grid-template-columns:minmax(0,1fr)}
 @media (max-width:899px){
   .case-main{grid-template-columns:minmax(0,1fr);grid-template-areas:"head" "facts" "body" "cmts"}
   .case-facts{padding:12px 0 0;border-left:0;border-top:1px dashed var(--line);flex-direction:row;flex-wrap:wrap;gap:8px 24px}
   .case-facts>div{gap:6px}
   .case-facts dt{flex:none}
   .cmt-form{grid-template-columns:minmax(0,1fr)}
+  .case.has-media{grid-template-columns:minmax(0,280px) minmax(0,1fr)}
+}
+/* 좁은 화면에서는 사진을 글 위로 올립니다. */
+@media (max-width:719px){
+  .case.has-media{grid-template-columns:minmax(0,1fr)}
+  .case-media{border-right:0;border-bottom:1px solid var(--line-soft)}
+  .media-frame{position:relative;aspect-ratio:4/3}
 }
 @media (max-width:639px){
   .rank-tabs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
   .rank-tab{padding:0 4px;gap:6px}
   .rank-word{display:none}
+  .rank-ribbon{left:12px;width:40px;padding:10px 0 18px;font-size:22px}
   .case-main{padding:16px 16px 0;gap:14px}
-  .case-head{gap:12px}
-  .rank-badge{width:48px;height:54px;font-size:32px}
   .case-title{font-size:20px}
-  .case-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px}
+  .case:not(.has-media) .case-title{min-height:40px;padding-left:50px}
+  .case-facts,.case.has-media .case-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px}
   .case-review{font-size:15px;line-height:1.8}
   .spoiler-btn{padding:0 12px}
   .spoiler-text{padding:4px 12px 14px}
-  .photo-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
-  .photo-grid.one{grid-template-columns:minmax(0,1fr)}
+  .media-nav{width:36px;height:44px;margin-top:-22px}
   .case-cmts{margin:0 -16px}
   .cmt-toggle{padding:0 16px}
   .cmt-panel{padding:4px 16px 18px}
