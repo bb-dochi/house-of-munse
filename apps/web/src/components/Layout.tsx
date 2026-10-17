@@ -11,34 +11,56 @@ export function Layout({ page, count, children, footNote, footer = true }: { pag
   const inMore = page === 'wishlist' || page === 'reviews' || page === 'ask';
   const inAdmin = page === 'admin' || page === 'insta';
   const dot = (p: Page) => (page === p ? <span className="nv-dot" aria-hidden="true">◆</span> : null);
+  const admin = (
+    <>
+      <Link to="/admin" {...cur('admin')}>컬렉션 관리</Link>
+      {/* 인스타 운영은 관리자로 로그인한 탭에서만 보입니다. 내용도 관리자 API로만 받습니다. */}
+      {auth.get() && <Link to="/insta" {...cur('insta')}>인스타 운영</Link>}
+    </>
+  );
+  const extra = (
+    <>
+      <Link to="/wishlist" {...cur('wishlist')}>위시리스트</Link>
+      <Link to="/ask" {...cur('ask')}>공방지기와 대화</Link>
+      <a href="https://bg-mpti-test.vercel.app/" target="_blank" rel="noreferrer" className="nv">미플 유형 테스트 ↗</a>
+    </>
+  );
   return (
     <div className="app g14">
       <header className="hd">
-        <Link to="/" className="brand">
+        {/* 홈은 로고로 갑니다. */}
+        <Link to="/" className="brand" aria-label="HOUSE OF MUNSE 홈">
           <span className="g11 brand-name">HOUSE OF MUNSE</span>
           {(page === 'admin' || page === 'insta') && <span className="g11 brand-admin">ADMIN</span>}
         </Link>
         <nav aria-label="주 메뉴" className="hd-nav">
-          <Link to="/" {...cur('home')}>{dot('home')}공방</Link>
           <Link to="/collection" {...cur('collection')}>
             {dot('collection')}컬렉션{count !== undefined && <span className="g11 count">{count}</span>}
           </Link>
           <Link to="/mysteries" {...cur('mysteries')}>{dot('mysteries')}머더미스터리<span className="nv-long"> 후기</span></Link>
           <details className="more">
             <summary className={inMore ? 'nv on' : 'nv'}>{inMore && <span className="nv-dot" aria-hidden="true">◆</span>}기타 ▾</summary>
-            <div className="more-menu">
-              <Link to="/wishlist" {...cur('wishlist')}>위시리스트</Link>
-              <Link to="/ask" {...cur('ask')}>공방지기와 대화</Link>
-              <a href="https://bg-mpti-test.vercel.app/" target="_blank" rel="noreferrer" className="nv">미플 유형 테스트 ↗</a>
-            </div>
+            <div className="more-menu">{extra}</div>
           </details>
         </nav>
         <details className="more adm-more">
           <summary className={inAdmin ? 'nv on' : 'nv'}>{inAdmin && <span className="nv-dot" aria-hidden="true">◆</span>}관리자 ▾</summary>
           <div className="more-menu">
-            <Link to="/admin" {...cur('admin')}>컬렉션 관리</Link>
-            {/* 인스타 운영은 관리자로 로그인한 탭에서만 보입니다. 내용도 관리자 API로만 받습니다. */}
-            {auth.get() && <Link to="/insta" {...cur('insta')}>인스타 운영</Link>}
+            {admin}
+          </div>
+        </details>
+        {/* 폰에서는 컬렉션만 밖에 두고 나머지 메뉴는 모두 여기로 접습니다. */}
+        <span className="hd-quick">
+          <Link to="/collection" {...cur('collection')}>컬렉션{count !== undefined && <span className="g11 count">{count}</span>}</Link>
+        </span>
+        <details className="more burger">
+          <summary className="nv" aria-label="메뉴 열기">≡</summary>
+          <div className="more-menu">
+            <Link to="/mysteries" {...cur('mysteries')}>머더미스터리 후기</Link>
+            {extra}
+            <hr className="menu-sep" />
+            <span className="g11 menu-lab">관리자</span>
+            {admin}
           </div>
         </details>
       </header>

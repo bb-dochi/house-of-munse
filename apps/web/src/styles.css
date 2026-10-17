@@ -40,6 +40,10 @@ summary.nv::-webkit-details-marker{display:none}
 .more{position:relative}
 .more-menu{position:absolute;right:0;top:46px;z-index:30;min-width:170px;white-space:nowrap;padding:4px 6px;background:var(--panel);border:1px solid var(--line);display:flex;flex-direction:column}
 .more-menu .nv.on{box-shadow:none}
+.burger,.hd-quick{display:none}
+.menu-sep{width:100%;margin:4px 0;border:0;border-top:1px solid var(--line-dim)}
+.menu-lab{padding:6px 12px 2px;font-size:12px;color:var(--dim);letter-spacing:.06em}
+.burger>summary{width:44px;justify-content:center;padding:0;font-size:22px}
 .ft{margin-top:auto;display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 24px;padding:12px 56px;background:var(--ink-2);border-top:1px solid var(--line-dim);font-size:12px;letter-spacing:.08em;color:var(--dim)}
 .ft a{color:var(--dim)}
 
@@ -455,9 +459,19 @@ select.cell{background:var(--panel)}
 @media (prefers-reduced-motion:reduce){.bgm.on .bgm-icon{animation:none}}
 
 @media (max-width:639px){
-  .hd{padding:10px 16px}
+  .hd{flex-wrap:nowrap;gap:4px;padding:10px 16px}
+  .brand{min-width:0}
+  .brand-name{font-size:18px;white-space:nowrap}
+  .brand-admin{display:none}
   .hd .adm:not(.on){display:none}
-  .hd .adm-more .more-menu{left:0;right:auto}
+  .hd-nav{display:none}
+  .burger{display:block}
+  .hd .adm-more{display:none}
+  .hd-quick{display:block;margin-left:auto}
+  .hd .hd-quick .nv{min-height:44px;font-size:14px}
+  .hd .burger>summary{min-height:44px;padding:0;font-size:22px}
+  .hd .more-menu .nv{min-height:44px;padding:0 12px;font-size:15px}
+  .hd .more-menu .nv.on{color:#F3DFA6}
   .hd .nv{padding:0 8px;font-size:12px;min-height:36px}
   .pad,.ft{padding-left:16px;padding-right:16px}
   .h1{font-size:30px}
